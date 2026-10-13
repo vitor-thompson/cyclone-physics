@@ -91,15 +91,11 @@ namespace cyclone {
             z += vector.z * scale;
         }
 
-        // --- NOVOS MÉTODOS: PRODUTO POR COMPONENTES ---
-
-        /** Calcula e retorna o produto componente a componente com outro vetor. */
         Vector3 componentProduct(const Vector3& vector) const
         {
             return Vector3(x * vector.x, y * vector.y, z * vector.z);
         }
 
-        /** Atualiza este vetor multiplicando seus componentes pelos do vetor fornecido. */
         void componentProductUpdate(const Vector3& vector)
         {
             x *= vector.x;
@@ -107,18 +103,42 @@ namespace cyclone {
             z *= vector.z;
         }
 
-        // --- NOVOS MÉTODOS: PRODUTO ESCALAR (DOT PRODUCT) ---
-
-        /** Calcula e retorna o produto escalar entre este vetor e outro. */
         real scalarProduct(const Vector3& vector) const
         {
             return x * vector.x + y * vector.y + z * vector.z;
         }
 
-        /** Sobrecarga do operador * para realizar o produto escalar de forma intuitiva. */
         real operator*(const Vector3& vector) const
         {
             return x * vector.x + y * vector.y + z * vector.z;
+        }
+
+        // --- NOVOS MÉTODOS: PRODUTO VETORIAL (CROSS PRODUCT) ---
+
+        /** Calcula e retorna o produto vetorial entre este vetor e outro. */
+        Vector3 vectorProduct(const Vector3& vector) const
+        {
+            return Vector3(
+                y * vector.z - z * vector.y,
+                z * vector.x - x * vector.z,
+                x * vector.y - y * vector.x
+            );
+        }
+
+        /** Atualiza este vetor para o produto vetorial usando o operador %=. */
+        void operator%=(const Vector3& vector)
+        {
+            *this = vectorProduct(vector);
+        }
+
+        /** Retorna o produto vetorial usando a sobrecarga do operador %. */
+        Vector3 operator%(const Vector3& vector) const
+        {
+            return Vector3(
+                y * vector.z - z * vector.y,
+                z * vector.x - x * vector.z,
+                x * vector.y - y * vector.x
+            );
         }
     };
 }
