@@ -3,12 +3,14 @@
 #include <cmath>
 
 namespace cyclone {
-    /**
-     * Define a precisão dos números reais. O Cyclone pode ser compilado
-     * em versões de precisão simples ou dupla. Por padrão, usamos precisão simples.
-     */
+    // Define se usamos float ou double para os cálculos do motor
     typedef float real;
 
-    /** Define a precisão do operador de raiz quadrada com base no tipo real. */
-    #define real_sqrt sqrtf
+    // Função de raiz quadrada compatível com a precisão escolhida
+    inline real real_sqrt(real val) {
+        return sqrtf(val);
+    }
+
+    // --- NOVO: Precisão para o operador de potência (usado no damping) ---
+    #define real_pow powf
 }
