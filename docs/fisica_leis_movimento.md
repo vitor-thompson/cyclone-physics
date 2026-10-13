@@ -52,7 +52,7 @@ Como a distância da superfície terrestre ao centro da Terra é gigantesca ($6.
 
 Fórmula do vetor gravidade (eixo Y apontando para cima):
 
-$$\mathbf{g} = \begin{matrix} 0 \\ -g \\ 0 \end{matrix}$$
+$$\mathbf{g} = (0, -g, 0)$$
 
 ## 5. O Integrador Físico (Newton-Euler)
 
