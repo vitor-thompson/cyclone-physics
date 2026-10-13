@@ -40,7 +40,8 @@ Fórmula:
 
 $$k\mathbf{a} = (kx, ky, kz)$$
 
-  ```Código associado:
+- **Código associado:**
+  ```cpp
   Vector3 aceleracaoDuplicada = aceleracao * 2.0f;
   v.invert(); // Inverte o sentido (equivalente a v *= -1)
   ```
