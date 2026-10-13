@@ -60,9 +60,6 @@ namespace cyclone {
             return Vector3(x * value, y * value, z * value);
         }
 
-        // --- NOVOS MÉTODOS DE ADIÇÃO E SUBTRAÇÃO ---
-
-        /** Adiciona o vetor fornecido a este. */
         void operator+=(const Vector3& v)
         {
             x += v.x;
@@ -70,13 +67,11 @@ namespace cyclone {
             z += v.z;
         }
 
-        /** Retorna a soma deste vetor com o vetor fornecido. */
         Vector3 operator+(const Vector3& v) const
         {
             return Vector3(x + v.x, y + v.y, z + v.z);
         }
 
-        /** Subtrai o vetor fornecido deste. */
         void operator-=(const Vector3& v)
         {
             x -= v.x;
@@ -84,18 +79,46 @@ namespace cyclone {
             z -= v.z;
         }
 
-        /** Retorna a subtração do vetor fornecido deste. */
         Vector3 operator-(const Vector3& v) const
         {
             return Vector3(x - v.x, y - v.y, z - v.z);
         }
 
-        /** Adiciona o vetor fornecido a este, escalado pela quantidade dada. */
         void addScaledVector(const Vector3& vector, real scale)
         {
             x += vector.x * scale;
             y += vector.y * scale;
             z += vector.z * scale;
+        }
+
+        // --- NOVOS MÉTODOS: PRODUTO POR COMPONENTES ---
+
+        /** Calcula e retorna o produto componente a componente com outro vetor. */
+        Vector3 componentProduct(const Vector3& vector) const
+        {
+            return Vector3(x * vector.x, y * vector.y, z * vector.z);
+        }
+
+        /** Atualiza este vetor multiplicando seus componentes pelos do vetor fornecido. */
+        void componentProductUpdate(const Vector3& vector)
+        {
+            x *= vector.x;
+            y *= vector.y;
+            z *= vector.z;
+        }
+
+        // --- NOVOS MÉTODOS: PRODUTO ESCALAR (DOT PRODUCT) ---
+
+        /** Calcula e retorna o produto escalar entre este vetor e outro. */
+        real scalarProduct(const Vector3& vector) const
+        {
+            return x * vector.x + y * vector.y + z * vector.z;
+        }
+
+        /** Sobrecarga do operador * para realizar o produto escalar de forma intuitiva. */
+        real operator*(const Vector3& vector) const
+        {
+            return x * vector.x + y * vector.y + z * vector.z;
         }
     };
 }
