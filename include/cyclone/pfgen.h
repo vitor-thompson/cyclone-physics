@@ -74,6 +74,27 @@ namespace cyclone {
     };
 
     /**
+     * @brief Gerador de força que aplica uma força elástica onde uma das extremidades é fixa no espaço (âncora).
+     */
+    class ParticleAnchoredSpring : public ParticleForceGenerator
+    {
+    protected:
+        /** A posição do ponto fixo (âncora) no espaço. */
+        Vector3 *anchor;
+        /** Constante elástica (rigidez) da mola. */
+        real springConstant;
+        /** Comprimento de repouso da mola. */
+        real restLength;
+
+    public:
+        /** Cria uma nova mola ancorada com os parâmetros fornecidos. */
+        ParticleAnchoredSpring(Vector3 *anchor, real springConstant, real restLength);
+
+        /** Aplica a força de mola ancorada à partícula dada. */
+        virtual void updateForce(Particle *particle, real duration);
+    };
+
+    /**
      * @brief Registro central que gerencia quais forças se aplicam a quais partículas.
      */
     class ParticleForceRegistry
