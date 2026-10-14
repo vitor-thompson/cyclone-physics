@@ -33,6 +33,27 @@ namespace cyclone {
         particle->addForce(force);
     }
 
+    // --- Mola Básica (ParticleSpring) ---
+    ParticleSpring::ParticleSpring(Particle *other, real springConstant, real restLength)
+        : other(other), springConstant(springConstant), restLength(restLength) {}
+
+    void ParticleSpring::updateForce(Particle* particle, real duration)
+    {
+        // 1. Calcula o vetor entre as posições das duas partículas
+        Vector3 force = particle->getPosition();
+        force -= other->getPosition();
+
+        // 2. Calcula a magnitude da força elástica usando a Lei de Hooke
+        real magnitude = force.magnitude();
+        magnitude = real_abs(magnitude - restLength);
+        magnitude *= springConstant;
+
+        // 3. Normaliza o vetor e aplica a força no sentido oposto (atração/repulsão)
+        force.normalize();
+        force *= -magnitude;
+        particle->addForce(force);
+    }
+
     // --- Implementação do Registro de Forças ---
     void ParticleForceRegistry::add(Particle* particle, ParticleForceGenerator *fg)
     {
