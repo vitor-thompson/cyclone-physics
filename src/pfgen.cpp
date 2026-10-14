@@ -125,6 +125,33 @@ namespace cyclone {
         particle->addForce(force);
     }
 
+    // --- Mola Rígida Simulada / Fake Implicit Spring (ParticleFakeSpring) ---
+    ParticleFakeSpring::ParticleFakeSpring(Vector3 *anchor, real springConstant, real damping)
+        : anchor(anchor), springConstant(springConstant), damping(damping) {}
+
+    void ParticleFakeSpring::updateForce(Particle* particle, real duration)
+    {
+        if (!particle->hasFiniteMass()) return;
+
+        // 1. Calcula a posição relativa da partícula em relação à âncora
+        Vector3 position = particle->getPosition();
+        position -= *anchor;
+
+        // 2. Calcula as constantes do oscilador e verifica limites
+        real gamma = 0.5f * real_sqrt(4 * springConstant - damping * damping);
+        if (gamma == 0.0f) return;
+
+        Vector3 c = position * (damping / (2.0f * gamma)) + particle->getVelocity() * (1.0f / gamma);
+
+        // 3. Calcula a posição prevista (alvo) ao fim do quadro
+        Vector3 target = position * real_cos(gamma * duration) + c * real_sin(gamma * duration);
+        target *= real_exp(-0.5f * duration * damping);
+
+        // 4. Calcula a aceleração resultante necessária e converte em força
+        Vector3 accel = (target - position) * (1.0f / (duration * duration)) - particle->getVelocity() * duration;
+        particle->addForce(accel * particle->getMass());
+    }
+
     // --- Implementação do Registro de Forças ---
     void ParticleForceRegistry::add(Particle* particle, ParticleForceGenerator *fg)
     {
