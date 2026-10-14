@@ -20,7 +20,7 @@ No mundo real, projéteis viajam a velocidades altíssimas (de $250\text{ m/s}$ 
   shot->particle.setDamping(0.99f);                  // Amortecimento de arrasto
   ```
 
-2. Sistemas de Partículas e Cadeias de Eventos (Fogos de Artifício)
+## 2. Sistemas de Partículas e Cadeias de Eventos (Fogos de Artifício)
 Sistemas de partículas permitem simular explosões, fumaça, fogo e água. No motor Cyclone, criamos uma classe derivada Firework que herda de Particle e adiciona controle de tempo de vida e regras de evolução em cadeia.
 
 Propriedades da Partícula de Fogo de Artifício:
