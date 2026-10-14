@@ -98,6 +98,33 @@ namespace cyclone {
         particle->addForce(force);
     }
 
+    // --- Empuxo / Flutuação (ParticleBuoyancy) ---
+    ParticleBuoyancy::ParticleBuoyancy(real maxDepth, real volume, real waterHeight, real liquidDensity)
+        : maxDepth(maxDepth), volume(volume), waterHeight(waterHeight), liquidDensity(liquidDensity) {}
+
+    void ParticleBuoyancy::updateForce(Particle* particle, real duration)
+    {
+        // 1. Obtém a profundidade (coordenada Y do objeto)
+        real depth = particle->getPosition().y;
+
+        // 2. Verifica se o objeto está totalmente fora da água (acima da superfície + maxDepth)
+        if (depth >= waterHeight + maxDepth) return;
+
+        Vector3 force(0, 0, 0);
+
+        // 3. Verifica se o objeto está totalmente submerso (abaixo da superfície - maxDepth)
+        if (depth <= waterHeight - maxDepth)
+        {
+            force.y = liquidDensity * volume;
+            particle->addForce(force);
+            return;
+        }
+
+        // 4. Caso contrário, o objeto está parcialmente submerso
+        force.y = liquidDensity * volume * (depth - maxDepth - waterHeight) / (2.0f * maxDepth);
+        particle->addForce(force);
+    }
+
     // --- Implementação do Registro de Forças ---
     void ParticleForceRegistry::add(Particle* particle, ParticleForceGenerator *fg)
     {
