@@ -13,4 +13,6 @@ namespace cyclone {
 
     // --- NOVO: Precisão para o operador de potência (usado no damping) ---
     #define real_pow powf
+    #define real_abs fabsf
+
 }
