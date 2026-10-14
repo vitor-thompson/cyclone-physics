@@ -53,6 +53,27 @@ namespace cyclone {
     };
 
     /**
+     * @brief Gerador de força que aplica uma força elástica (Lei de Hooke) entre duas partículas.
+     */
+    class ParticleSpring : public ParticleForceGenerator
+    {
+    protected:
+        /** A partícula na outra extremidade da mola. */
+        Particle *other;
+        /** Constante elástica (rigidez) da mola. */
+        real springConstant;
+        /** Comprimento de repouso da mola. */
+        real restLength;
+
+    public:
+        /** Cria uma nova mola com os parâmetros fornecidos. */
+        ParticleSpring(Particle *other, real springConstant, real restLength);
+
+        /** Aplica a força de mola à partícula dada. */
+        virtual void updateForce(Particle *particle, real duration);
+    };
+
+    /**
      * @brief Registro central que gerencia quais forças se aplicam a quais partículas.
      */
     class ParticleForceRegistry
