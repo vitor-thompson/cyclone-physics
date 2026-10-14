@@ -54,6 +54,27 @@ namespace cyclone {
         particle->addForce(force);
     }
 
+    // --- Mola Ancorada (ParticleAnchoredSpring) ---
+    ParticleAnchoredSpring::ParticleAnchoredSpring(Vector3 *anchor, real springConstant, real restLength)
+        : anchor(anchor), springConstant(springConstant), restLength(restLength) {}
+
+    void ParticleAnchoredSpring::updateForce(Particle* particle, real duration)
+    {
+        // 1. Calcula o vetor entre a posição da partícula e o ponto de ancoragem fixo
+        Vector3 force = particle->getPosition();
+        force -= *anchor;
+
+        // 2. Calcula a magnitude da força elástica usando a Lei de Hooke
+        real magnitude = force.magnitude();
+        magnitude = real_abs(magnitude - restLength);
+        magnitude *= springConstant;
+
+        // 3. Normaliza o vetor e aplica a força no sentido oposto
+        force.normalize();
+        force *= -magnitude;
+        particle->addForce(force);
+    }
+
     // --- Implementação do Registro de Forças ---
     void ParticleForceRegistry::add(Particle* particle, ParticleForceGenerator *fg)
     {
