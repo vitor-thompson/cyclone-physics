@@ -14,6 +14,25 @@ namespace cyclone {
         particle->addForce(gravity * particle->getMass());
     }
 
+    // --- Arrasto (Drag) ---
+    ParticleDrag::ParticleDrag(real k1, real k2)
+        : k1(k1), k2(k2) {}
+
+    void ParticleDrag::updateForce(Particle* particle, real duration)
+    {
+        Vector3 force = particle->getVelocity();
+        
+        // Calcula o coeficiente de arrasto total com base na magnitude da velocidade
+        real dragCoeff = force.magnitude();
+        dragCoeff = k1 * dragCoeff + k2 * dragCoeff * dragCoeff;
+
+        // Calcula a força final no sentido oposto à velocidade (-v)
+        force.normalize();
+        force *= -dragCoeff;
+        
+        particle->addForce(force);
+    }
+
     // --- Implementação do Registro de Forças ---
     void ParticleForceRegistry::add(Particle* particle, ParticleForceGenerator *fg)
     {
