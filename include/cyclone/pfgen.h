@@ -116,6 +116,29 @@ namespace cyclone {
     };
 
     /**
+     * @brief Gerador de força que aplica empuxo (flutuação) para um plano de líquido paralelo ao plano XZ.
+     */
+    class ParticleBuoyancy : public ParticleForceGenerator
+    {
+    protected:
+        /** A profundidade máxima de submersão do objeto antes de gerar força máxima. */
+        real maxDepth;
+        /** O volume do objeto. */
+        real volume;
+        /** A altura da superfície da água (plano paralelo a XZ). */
+        real waterHeight;
+        /** A densidade do líquido (água pura = 1000 kg/m^3). */
+        real liquidDensity;
+
+    public:
+        /** Cria um novo gerador de empuxo com os parâmetros fornecidos. */
+        ParticleBuoyancy(real maxDepth, real volume, real waterHeight, real liquidDensity = 1000.0f);
+
+        /** Aplica a força de empuxo à partícula dada. */
+        virtual void updateForce(Particle *particle, real duration);
+    };
+
+    /**
      * @brief Registro central que gerencia quais forças se aplicam a quais partículas.
      */
     class ParticleForceRegistry
