@@ -75,6 +75,29 @@ namespace cyclone {
         particle->addForce(force);
     }
 
+    // --- Cabo Elástico / Bungee (ParticleBungee) ---
+    ParticleBungee::ParticleBungee(Particle *other, real springConstant, real restLength)
+        : other(other), springConstant(springConstant), restLength(restLength) {}
+
+    void ParticleBungee::updateForce(Particle* particle, real duration)
+    {
+        // 1. Calcula o vetor entre as posições das duas partículas
+        Vector3 force = particle->getPosition();
+        force -= other->getPosition();
+
+        // 2. Verifica se o bungee está comprimido ou dentro do comprimento de repouso
+        real magnitude = force.magnitude();
+        if (magnitude <= restLength) return; // Não gera força se não estiver esticado
+
+        // 3. Calcula a magnitude da força elástica de tração
+        magnitude = springConstant * (magnitude - restLength);
+
+        // 4. Normaliza o vetor e aplica a força de puxão
+        force.normalize();
+        force *= -magnitude;
+        particle->addForce(force);
+    }
+
     // --- Implementação do Registro de Forças ---
     void ParticleForceRegistry::add(Particle* particle, ParticleForceGenerator *fg)
     {
