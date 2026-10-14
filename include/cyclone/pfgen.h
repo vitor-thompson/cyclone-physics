@@ -11,11 +11,25 @@ namespace cyclone {
     {
     public:
         virtual ~ParticleForceGenerator() {}
-
-        /**
-         * @brief Calcula e atualiza a força aplicada à partícula fornecida.
-         */
         virtual void updateForce(Particle *particle, real duration) = 0;
+    };
+
+    /**
+     * @brief Gerador de força que aplica uma força gravitacional. 
+     * @details Uma única instância pode ser compartilhada por múltiplas partículas.
+     */
+    class ParticleGravity : public ParticleForceGenerator
+    {
+    protected:
+        /** Armazena a aceleração devido à gravidade. */
+        Vector3 gravity;
+
+    public:
+        /** Cria o gerador com a aceleração de gravidade fornecida. */
+        ParticleGravity(const Vector3 &gravity);
+
+        /** Aplica a força gravitacional à partícula dada. */
+        virtual void updateForce(Particle *particle, real duration);
     };
 
     /**
@@ -34,16 +48,9 @@ namespace cyclone {
         Registry registrations;
 
     public:
-        /** Registra um gerador de força para uma partícula. */
         void add(Particle* particle, ParticleForceGenerator *fg);
-
-        /** Remove o registro do par partícula-gerador. */
         void remove(Particle* particle, ParticleForceGenerator *fg);
-
-        /** Limpa todos os registros de conexões. */
         void clear();
-
-        /** Executa todos os geradores de força registrados para o quadro atual. */
         void updateForces(real duration);
     };
 }
