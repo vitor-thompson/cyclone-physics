@@ -95,6 +95,27 @@ namespace cyclone {
     };
 
     /**
+     * @brief Gerador de força que aplica uma força elástica (bungee) apenas quando esticado.
+     */
+    class ParticleBungee : public ParticleForceGenerator
+    {
+    protected:
+        /** A partícula na outra extremidade do elástico. */
+        Particle *other;
+        /** Constante elástica do bungee. */
+        real springConstant;
+        /** O comprimento a partir do qual o bungee começa a gerar força. */
+        real restLength;
+
+    public:
+        /** Cria um novo bungee com os parâmetros fornecidos. */
+        ParticleBungee(Particle *other, real springConstant, real restLength);
+
+        /** Aplica a força do bungee à partícula dada (apenas se esticada). */
+        virtual void updateForce(Particle *particle, real duration);
+    };
+
+    /**
      * @brief Registro central que gerencia quais forças se aplicam a quais partículas.
      */
     class ParticleForceRegistry
