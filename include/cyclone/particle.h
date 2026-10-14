@@ -9,34 +9,32 @@ namespace cyclone {
         Vector3 position;
         Vector3 velocity;
         Vector3 acceleration;
+        
+        /** Acumulador de forças aplicadas à partícula no quadro atual. */
         Vector3 forceAccum;
+
         real damping;
 
     protected:
         real inverseMass;
 
     public:
-        // --- Construtor padrão ---
+        // Construtor padrão
         Particle()
             : position(0, 0, 0), velocity(0, 0, 0), acceleration(0, 0, 0),
-              forceAccum(0, 0, 0), damping(1.0f), inverseMass(0.0f) {}
+              forceAccum(0, 0, 0), damping(0.99f), inverseMass(1.0f) {}
 
-        // --- Setters de Posição, Velocidade e Aceleração ---
-        void setPosition(const Vector3 &position) { this->position = position; }
-        void setPosition(real x, real y, real z) { position.x = x; position.y = y; position.z = z; }
-        
+        // Setters básicos
+        void setPosition(real x, real y, real z) { position = Vector3(x, y, z); }
         Vector3 getPosition() const { return position; }
 
-        void setVelocity(const Vector3 &velocity) { this->velocity = velocity; }
-        void setVelocity(real x, real y, real z) { velocity.x = x; velocity.y = y; velocity.z = z; }
+        void setVelocity(real x, real y, real z) { velocity = Vector3(x, y, z); }
+        Vector3 getVelocity() const { return velocity; }
 
-        void setAcceleration(const Vector3 &acceleration) { this->acceleration = acceleration; }
-        void setAcceleration(real x, real y, real z) { acceleration.x = x; acceleration.y = y; acceleration.z = z; }
+        void setAcceleration(real x, real y, real z) { acceleration = Vector3(x, y, z); }
+        void setDamping(real d) { damping = d; }
 
-        void setDamping(real damping) { this->damping = damping; }
-        real getDamping() const { return damping; }
-
-        // --- Métodos de Massa ---
+        // Métodos de Massa
         void setMass(const real mass)
         {
             if (mass <= 0.0f) {
@@ -57,13 +55,20 @@ namespace cyclone {
         void setInverseMass(const real inverseMass) { this->inverseMass = inverseMass; }
         real getInverseMass() const { return inverseMass; }
 
-        // --- Limpeza e Acumulador de Forças ---
-        void clearAccumulator()
-        {
-            forceAccum = Vector3(0, 0, 0);
-        }
+        // --- NOVOS MÉTODOS DE FORÇA (Capítulo 5) ---
 
-        // --- Integrador ---
+        /**
+         * @brief Adiciona uma força à partícula para ser aplicada apenas na próxima iteração.
+         * @param force A força (vetor) a ser aplicada.
+         */
+        void addForce(const Vector3 &force);
+
+        /**
+         * @brief Limpa o acumulador de forças. Chamado automaticamente após a integração.
+         */
+        void clearAccumulator();
+
+        // Integrador Físico
         void integrate(real duration);
     };
 }
