@@ -8,29 +8,54 @@ namespace cyclone {
         return relativePos.magnitude();
     }
 
+    // --- ParticleCable ---
     unsigned ParticleCable::fillContact(ParticleContact *contact, unsigned limit) const
     {
-        // 1. Calcula o comprimento atual do cabo
         real length = currentLength();
-
-        // 2. Verifica se o cabo ultrapassou o comprimento máximo
-        if (length < maxLength)
-        {
-            return 0; // Cabo frouxo, nenhum contato gerado
+        if (length < maxLength) {
+            return 0;
         }
 
-        // 3. Preenche o contato para o resolvedor
         contact->particle[0] = particle[0];
         contact->particle[1] = particle[1];
 
-        // A normal aponta da partícula 1 para a partícula 0 (puxando-as de volta)
         Vector3 normal = particle[1]->getPosition() - particle[0]->getPosition();
         normal.normalize();
         contact->contactNormal = normal;
-
-        // A penetração é o quanto o cabo foi esticado além do limite
         contact->penetration = length - maxLength;
         contact->restitution = restitution;
+
+        return 1;
+    }
+
+    // --- ParticleRod ---
+    unsigned ParticleRod::fillContact(ParticleContact *contact, unsigned limit) const
+    {
+        real currentLen = currentLength();
+
+        // Se o comprimento estiver exato, nenhum contato é necessário
+        if (currentLen == length) {
+            return 0;
+        }
+
+        contact->particle[0] = particle[0];
+        contact->particle[1] = particle[1];
+
+        Vector3 normal = particle[1]->getPosition() - particle[0]->getPosition();
+        normal.normalize();
+
+        // Se a haste estiver muito longa, a normal puxa as partículas para perto.
+        // Se estiver muito curta, a normal empurra as partículas para fora.
+        if (currentLen > length) {
+            contact->contactNormal = normal;
+            contact->penetration = currentLen - length;
+        } else {
+            contact->contactNormal = normal * -1.0f;
+            contact->penetration = length - currentLen;
+        }
+
+        // Hastes não possuem bounciness (restituição zero)
+        contact->restitution = 0.0f;
 
         return 1;
     }
