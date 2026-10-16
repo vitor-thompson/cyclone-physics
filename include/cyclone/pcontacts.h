@@ -20,6 +20,9 @@ namespace cyclone {
         /** Direção normal do contato em coordenadas globais (da perspectiva da partícula 0). */
         Vector3 contactNormal;
 
+       /** Profundidade de interpenetração no ponto de contato. */
+        real penetration;
+
         /** Resolve o contato (velocidade e interpenetração). */
         void resolve(real duration);
 
@@ -29,5 +32,8 @@ namespace cyclone {
     protected:
         /** Trata os cálculos de impulso para esta colisão. */
         void resolveVelocity(real duration);
+
+        /** Resolve a sobreposição geométrica (interpenetração). */
+        void resolveInterpenetration(real duration);
     };
 }
