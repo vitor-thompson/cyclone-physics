@@ -36,4 +36,26 @@ namespace cyclone {
         /** Resolve a sobreposição geométrica (interpenetração). */
         void resolveInterpenetration(real duration);
     };
+    
+    /**
+     * @brief Gerencia e resolve um conjunto de contatos de partículas iterativamente.
+     */
+    class ParticleContactResolver
+    {
+    protected:
+        /** Número máximo de iterações permitidas por quadro. */
+        unsigned iterations;
+        /** Rastreamento de desempenho: número de iterações realmente utilizadas. */
+        unsigned iterationsUsed;
+
+    public:
+        /** Cria um novo resolvedor com o limite de iterações especificado. */
+        ParticleContactResolver(unsigned iterations);
+
+        /** Define o número de iterações. */
+        void setIterations(unsigned iterations);
+
+        /** Resolve um array de contatos para velocidade e interpenetração. */
+        void resolveContacts(ParticleContact *contactArray, unsigned numContacts, real duration);
+    };
 }
