@@ -16,48 +16,61 @@ namespace cyclone {
         return relativeVelocity * contactNormal; // Produto escalar
     }
 
-    void ParticleContact::resolveVelocity(real duration)
+   void ParticleContact::resolveVelocity(real duration)
     {
-        // 1. Encontra a velocidade relativa na direção da normal de contato
+        // 1. Encontra a velocidade de separação na direção da normal de contato
         real separatingVelocity = calculateSeparatingVelocity();
 
-        // 2. Se a velocidade já for positiva, os objetos estão se afastar ou parados - nenhum impulso necessário
-        if (separatingVelocity > 0)
-        {
+        // Se já está se afastando, nenhum impulso é necessário
+        if (separatingVelocity > 0) {
             return;
         }
 
-        // 3. Calcula a nova velocidade de separação desejada usando o coeficiente de restituição
+        // 2. Calcula a nova velocidade desejada com base na restituição
         real newSepVelocity = -separatingVelocity * restitution;
+
+        // 3. Verifica o acúmulo de velocidade causado exclusivamente pela aceleração no quadro atual
+        Vector3 accCausedVelocity = particle[0]->getAcceleration();
+        if (particle[1]) {
+            accCausedVelocity -= particle[1]->getAcceleration();
+        }
+        real accCausedSepVelocity = accCausedVelocity * contactNormal * duration;
+
+        // Se houver velocidade de aproximação gerada pela aceleração, removemos do cálculo de ricochete
+        if (accCausedSepVelocity < 0)
+        {
+            newSepVelocity += restitution * accCausedSepVelocity;
+            if (newSepVelocity < 0) {
+                newSepVelocity = 0; // Garante que não removemos mais do que o necessário
+            }
+        }
+
         real deltaVelocity = newSepVelocity - separatingVelocity;
 
-        // 4. Soma a massa inversa total dos objetos envolvidos
+        // 4. Soma a massa inversa total
         real totalInverseMass = particle[0]->getInverseMass();
         if (particle[1]) {
             totalInverseMass += particle[1]->getInverseMass();
         }
 
-        // Se todos os objetos tiverem massa infinita, o impulso não tem efeito
         if (totalInverseMass <= 0) return;
 
-        // 5. Calcula o impulso necessário
+        // 5. Calcula e aplica o impulso proporcional à massa inversa
         real impulse = deltaVelocity / totalInverseMass;
         Vector3 impulsePerIMass = contactNormal * impulse;
 
-        // 6. Aplica os impulsos nas direções corretas proporcionalmente à massa inversa
         particle[0]->setVelocity(
-            particle[0]->getVelocity() + impulsePerIMass * particle[0]->getInverseMass()
+            particle[0]->getPosition() == particle[0]->getPosition() ? // Checagem de segurança
+            particle[0]->getVelocity() + impulsePerIMass * particle[0]->getInverseMass() : 
+            particle[0]->getVelocity()
         );
 
-        if (particle[1])
-        {
-            // A segunda partícula vai na direção oposta
+        if (particle[1]) {
             particle[1]->setVelocity(
                 particle[1]->getVelocity() + impulsePerIMass * -particle[1]->getInverseMass()
             );
         }
     }
-}
 void ParticleContact::resolveInterpenetration(real duration)
     {
         // Se não houver penetração, nada a fazer
