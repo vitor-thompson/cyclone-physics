@@ -58,3 +58,30 @@ namespace cyclone {
         }
     }
 }
+void ParticleContact::resolveInterpenetration(real duration)
+    {
+        // Se não houver penetração, nada a fazer
+        if (penetration <= 0) return;
+
+        real totalInverseMass = particle[0]->getInverseMass();
+        if (particle[1]) {
+            totalInverseMass += particle[1]->getInverseMass();
+        }
+
+        if (totalInverseMass <= 0) return;
+
+        // Calcula a quantidade de movimento corretiva por unidade de massa inversa
+        Vector3 movePerIMass = contactNormal * (-penetration / totalInverseMass);
+
+        // Aplica a correção de posição proporcional à massa inversa
+        particle[0]->setPosition(
+            particle[0]->getPosition() + movePerIMass * particle[0]->getInverseMass()
+        );
+
+        if (particle[1]) {
+            particle[1]->setPosition(
+                particle[1]->getPosition() + movePerIMass * -particle[1]->getInverseMass()
+            );
+        }
+    }
+}
