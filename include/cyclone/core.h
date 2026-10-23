@@ -5,41 +5,23 @@
 namespace cyclone {
     /**
      * @brief Representa um vetor tridimensional (espaço 3D cartesiano).
-     * 
-     * Esta classe serve como a fundação matemática de todo o motor de física Cyclone,
-     * armazenando coordenadas espaciais, direções e gerindo operações vetoriais básicas.
      */
     class Vector3
     {
     public:
-        // --- COMPONENTES DO VETOR ---
-        real x; ///< Posição ou deslocamento ao longo do eixo X.
-        real y; ///< Posição ou deslocamento ao longo do eixo Y.
-        real z; ///< Posição ou deslocamento ao longo do eixo Z.
+        real x;
+        real y;
+        real z;
 
     private:
-        // --- OTIMIZAÇÃO DE HARDWARE ---
-        real pad; ///< Espaço de preenchimento para garantir alinhamento de 4 palavras na memória da CPU.
+        real pad;
 
     public:
-        // --- CONSTRUTORES ---
-
-        /**
-         * @brief Construtor padrão. Inicializa o vetor como um vetor nulo (0, 0, 0).
-         */
         Vector3() : x(0), y(0), z(0), pad(0) {}
 
-        /**
-         * @brief Construtor explícito. Inicializa o vetor com valores específicos.
-         */
         Vector3(const real x, const real y, const real z)
             : x(x), y(y), z(z), pad(0) {}
 
-        // --- MANIPULAÇÃO BÁSICA ---
-
-        /**
-         * @brief Inverte o sentido de todos os componentes do vetor (inversão aditiva).
-         */
         void invert()
         {
             x = -x;
@@ -47,27 +29,16 @@ namespace cyclone {
             z = -z;
         }
 
-        /**
-         * @brief Calcula a magnitude (comprimento geométrico) do vetor usando Teorema de Pitágoras.
-         */
         real magnitude() const
         {
             return real_sqrt(x * x + y * y + z * z);
         }
 
-        /**
-         * @brief Retorna o quadrado da magnitude.
-         * @details Útil para otimização, evitando o uso custoso da raiz quadrada quando
-         * precisamos apenas comparar distâncias relativas.
-         */
         real squareMagnitude() const
         {
             return x * x + y * y + z * z;
         }
 
-        /**
-         * @brief Transforma o vetor em um vetor unitário (tamanho igual a 1), mantendo sua direção.
-         */
         void normalize()
         {
             real l = magnitude();
@@ -80,9 +51,6 @@ namespace cyclone {
             }
         }
 
-        // --- MULTIPLICAÇÃO POR ESCALAR ---
-
-        /** Multiplica diretamente este vetor por um número escalar. */
         void operator*=(const real value)
         {
             x *= value;
@@ -90,15 +58,11 @@ namespace cyclone {
             z *= value;
         }
 
-        /** Retorna uma nova cópia do vetor multiplicada por um escalar. */
         Vector3 operator*(const real value) const
         {
             return Vector3(x * value, y * value, z * value);
         }
 
-        // --- ADIÇÃO E SUBTRAÇÃO DE VETORES ---
-
-        /** Adiciona outro vetor diretamente a este. */
         void operator+=(const Vector3& v)
         {
             x += v.x;
@@ -106,13 +70,11 @@ namespace cyclone {
             z += v.z;
         }
 
-        /** Retorna a soma deste vetor com outro. */
         Vector3 operator+(const Vector3& v) const
         {
             return Vector3(x + v.x, y + v.y, z + v.z);
         }
 
-        /** Subtrai outro vetor diretamente deste. */
         void operator-=(const Vector3& v)
         {
             x -= v.x;
@@ -120,19 +82,11 @@ namespace cyclone {
             z -= v.z;
         }
 
-        /** Retorna a diferença entre este vetor e outro. */
         Vector3 operator-(const Vector3& v) const
         {
             return Vector3(x - v.x, y - v.y, z - v.z);
         }
 
-        // --- OPERAÇÕES OTIMIZADAS ---
-
-        /**
-         * @brief Adiciona a este vetor outro vetor previamente escalado.
-         * @details Fundamental para o integrador físico: atualiza posições somando a velocidade vezes o tempo (p + v*t)
-         * de forma eficiente sem gerar objetos temporários na memória.
-         */
         void addScaledVector(const Vector3& vector, real scale)
         {
             x += vector.x * scale;
@@ -140,15 +94,11 @@ namespace cyclone {
             z += vector.z * scale;
         }
 
-        // --- PRODUTO POR COMPONENTES ---
-
-        /** Retorna um novo vetor formado pela multiplicação componente a componente. */
         Vector3 componentProduct(const Vector3& vector) const
         {
             return Vector3(x * vector.x, y * vector.y, z * vector.z);
         }
 
-        /** Atualiza este vetor multiplicando seus componentes pelos de outro vetor. */
         void componentProductUpdate(const Vector3& vector)
         {
             x *= vector.x;
@@ -156,27 +106,16 @@ namespace cyclone {
             z *= vector.z;
         }
 
-        // --- PRODUTO ESCALAR (DOT PRODUCT) ---
-
-        /** Calcula e retorna o produto escalar (retorna um número escalar). */
         real scalarProduct(const Vector3& vector) const
         {
             return x * vector.x + y * vector.y + z * vector.z;
         }
 
-        /** Sobrecarga do operador * para atuar como produto escalar entre dois vetores. */
         real operator*(const Vector3& vector) const
         {
             return x * vector.x + y * vector.y + z * vector.z;
         }
 
-        // --- PRODUTO VETORIAL (CROSS PRODUCT) ---
-
-        /**
-         * @brief Calcula e retorna o produto vetorial (cross product).
-         * @details Retorna um vetor ortogonal (perpendicular) aos dois vetores de entrada,
-         * essencial para cálculos de torque e eixos de rotação.
-         */
         Vector3 vectorProduct(const Vector3& vector) const
         {
             return Vector3(
@@ -186,13 +125,11 @@ namespace cyclone {
             );
         }
 
-        /** Atualiza este vetor para o resultado do produto vetorial usando o operador %=. */
         void operator%=(const Vector3& vector)
         {
             *this = vectorProduct(vector);
         }
 
-        /** Retorna o produto vetorial utilizando a sobrecarga do operador %. */
         Vector3 operator%(const Vector3& vector) const
         {
             return Vector3(
@@ -204,59 +141,28 @@ namespace cyclone {
     };
 
     /**
-     * @brief Holds a three degree of freedom orientation.
+     * @brief Representa a orientação em três graus de liberdade (Quatérnion).
      */
     class Quaternion
     {
     public:
         union {
             struct {
-                /**
-                 * @brief Holds the real component of the quaternion.
-                 */
                 real r;
-
-                /**
-                 * @brief Holds the first complex component of the quaternion.
-                 */
                 real i;
-
-                /**
-                 * @brief Holds the second complex component of the quaternion.
-                 */
                 real j;
-
-                /**
-                 * @brief Holds the third complex component of the quaternion.
-                 */
                 real k;
             };
-
-            /**
-             * @brief Holds the quaternion data in array form.
-             */
             real data[4];
         };
 
-        /**
-         * @brief Construtor padrão. Inicializa como um quatérnion identidade (1, 0, 0, 0).
-         */
         Quaternion() : r(1), i(0), j(0), k(0) {}
 
-        /**
-         * @brief Construtor explícito com valores fornecidos.
-         */
         Quaternion(real r, real i, real j, real k) : r(r), i(i), j(j), k(k) {}
 
-        /**
-         * @brief Normalizes the quaternion to unit length, making it a valid
-         * orientation quaternion.
-         */
         void normalize()
         {
             real d = r*r + i*i + j*j + k*k;
-            // Check for zero length quaternion, and use the no-rotation
-            // quaternion in that case.
             if (d == 0) {
                 r = 1;
                 return;
@@ -269,10 +175,6 @@ namespace cyclone {
             k *= d;
         }
 
-        /**
-         * @brief Multiplies the quaternion by the given quaternion.
-         * @param multiplier The quaternion by which to multiply.
-         */
         void operator *=(const Quaternion &multiplier)
         {
             Quaternion q = *this;
@@ -286,36 +188,34 @@ namespace cyclone {
                 q.i*multiplier.j - q.j*multiplier.i;
         }
 
-        /**
-         * @brief Rotaciona o quatérnion por um vetor de rotação (com um fator de escala).
-         * @param vector O vetor representando a velocidade ou mudança angular.
-         * @param scale O fator de escala (geralmente o delta time `dt`).
-         */
         void rotateByVector(const Vector3 &vector, real scale)
         {
             Quaternion q(0, vector.x * scale, vector.y * scale, vector.z * scale);
             (*this) *= q;
         }
+
+        void addScaledVector(const Vector3& vector, real scale)
+        {
+            Quaternion q(0,
+                vector.x * scale,
+                vector.y * scale,
+                vector.z * scale);
+            q *= *this;
+            r += q.r * ((real)0.5);
+            i += q.i * ((real)0.5);
+            j += q.j * ((real)0.5);
+            k += q.k * ((real)0.5);
+        }
     };
 
     /**
-     * @brief Holds an inertia tensor, consisting of a 3x3 row-major matrix.
-     * This matrix is not padding to produce an aligned structure, since
-     * it is most commonly used with a mass (single real) and two
-     * damping coefficients to make the 12-element characteristics array
-     * of a rigid body.
+     * @brief Tensor de inércia e matriz de rotação 3x3.
      */
     class Matrix3
     {
     public:
-        /**
-         * @brief Holds the tensor matrix data in array form.
-         */
         real data[9];
 
-        /**
-         * @brief Construtor padrão. Inicializa como matriz identidade.
-         */
         Matrix3()
         {
             data[0] = 1; data[1] = 0; data[2] = 0;
@@ -323,9 +223,6 @@ namespace cyclone {
             data[6] = 0; data[7] = 0; data[8] = 1;
         }
 
-        /**
-         * @brief Construtor com valores explícitos.
-         */
         Matrix3(real c0, real c1, real c2, real c3, real c4, real c5, real c6, real c7, real c8)
         {
             data[0] = c0; data[1] = c1; data[2] = c2;
@@ -333,9 +230,6 @@ namespace cyclone {
             data[6] = c6; data[7] = c7; data[8] = c8;
         }
 
-        /**
-         * @brief Multiplica esta matriz por um vetor 3D.
-         */
         Vector3 operator*(const Vector3& vector) const
         {
             return Vector3(
@@ -345,10 +239,6 @@ namespace cyclone {
             );
         }
 
-        /**
-         * @brief Returns a matrix that is this matrix multiplied by the given
-         * other matrix.
-         */
         Matrix3 operator*(const Matrix3& o) const
         {
             return Matrix3(
@@ -364,10 +254,6 @@ namespace cyclone {
             );
         }
 
-        /**
-         * @brief Sets the matrix to be the inverse of the given matrix.
-         * @param m The matrix to invert and use to set this.
-         */
         void setInverse(const Matrix3 &m)
         {
             real t4 = m.data[0]*m.data[4];
@@ -376,11 +262,9 @@ namespace cyclone {
             real t10 = m.data[2]*m.data[3];
             real t12 = m.data[1]*m.data[6];
             real t14 = m.data[2]*m.data[6];
-            // Calculate the determinant.
             real t16 = (t4*m.data[8] - t6*m.data[7] - t8*m.data[8] +
             t10*m.data[7] + t12*m.data[5] - t14*m.data[4]);
 
-            // Make sure the determinant is non-zero.
             if (t16 == (real)0.0f) return;
             real t17 = 1/t16;
             data[0] = (m.data[4]*m.data[8]-m.data[5]*m.data[7])*t17;
@@ -394,7 +278,6 @@ namespace cyclone {
             data[8] = (t4-t8)*t17;
         }
 
-        /** Returns a new matrix containing the inverse of this matrix. */
         Matrix3 inverse() const
         {
             Matrix3 result;
@@ -402,18 +285,11 @@ namespace cyclone {
             return result;
         }
 
-        /**
-         * @brief Inverts the matrix.
-         */
         void invert()
         {
             setInverse(*this);
         }
 
-        /**
-         * @brief Sets the matrix to be the transpose of the given matrix.
-         * @param m The matrix to transpose and use to set this.
-         */
         void setTranspose(const Matrix3 &m)
         {
             data[0] = m.data[0];
@@ -427,7 +303,6 @@ namespace cyclone {
             data[8] = m.data[8];
         }
 
-        /** Returns a new matrix containing the transpose of this matrix. */
         Matrix3 transpose() const
         {
             Matrix3 result;
@@ -435,10 +310,6 @@ namespace cyclone {
             return result;
         }
 
-        /**
-         * @brief Sets this matrix to be the rotation matrix corresponding to
-         * the given quaternion.
-         */
         void setOrientation(const Quaternion &q)
         {
             data[0] = 1 - (2*q.j*q.j + 2*q.k*q.k);
@@ -454,21 +325,13 @@ namespace cyclone {
     };
 
     /**
-     * @brief Holds a transform matrix, consisting of a rotation matrix and
-     * a position. The matrix has 12 elements; it is assumed that the
-     * remaining four are (0,0,0,1), producing a homogenous matrix.
+     * @brief Matriz de transformação 3x4 homogênea.
      */
     class Matrix4
     {
     public:
-        /**
-         * @brief Holds the transform matrix data in array form.
-         */
         real data[12];
 
-        /**
-         * @brief Construtor padrão. Inicializa como matriz identidade de 3x4.
-         */
         Matrix4()
         {
             data[0] = 1; data[1] = 0; data[2] = 0; data[3] = 0;
@@ -476,10 +339,6 @@ namespace cyclone {
             data[8] = 0; data[9] = 0; data[10] = 1; data[11] = 0;
         }
 
-        /**
-         * @brief Transform the given vector by this matrix.
-         * @param vector The vector to transform.
-         */
         Vector3 operator*(const Vector3& vector) const
         {
             return Vector3(
@@ -495,10 +354,6 @@ namespace cyclone {
             );
         }
 
-        /**
-         * @brief Returns a matrix that is this matrix multiplied by the given
-         * other matrix.
-         */
         Matrix4 operator*(const Matrix4& o) const
         {
             Matrix4 result;
@@ -521,18 +376,10 @@ namespace cyclone {
             return result;
         }
 
-        /**
-         * @brief Returns the determinant of the matrix.
-         */
         real getDeterminant() const;
 
-        /**
-         * @brief Sets the matrix to be the inverse of the given matrix.
-         * @param m The matrix to invert and use to set this.
-         */
         void setInverse(const Matrix4 &m);
 
-        /** Returns a new matrix containing the inverse of this matrix. */
         Matrix4 inverse() const
         {
             Matrix4 result;
@@ -540,18 +387,11 @@ namespace cyclone {
             return result;
         }
 
-        /**
-         * @brief Inverts the matrix.
-         */
         void invert()
         {
             setInverse(*this);
         }
 
-        /**
-         * @brief Sets this matrix to be the rotation matrix and position corresponding to
-         * the given quaternion and vector.
-         */
         void setOrientationAndPos(const Quaternion &q, const Vector3 &pos)
         {
             data[0] = 1 - (2*q.j*q.j + 2*q.k*q.k);
@@ -568,10 +408,6 @@ namespace cyclone {
             data[11] = pos.z;
         }
 
-        /**
-         * @brief Transform the given vector by the transformational inverse
-         * of this matrix.
-         */
         Vector3 transformInverse(const Vector3 &vector) const
         {
             Vector3 tmp = vector;
@@ -591,9 +427,6 @@ namespace cyclone {
             );
         }
 
-        /**
-         * @brief Transform the given direction vector by this matrix.
-         */
         Vector3 transformDirection(const Vector3 &vector) const
         {
             return Vector3(
@@ -609,10 +442,6 @@ namespace cyclone {
             );
         }
 
-        /**
-         * @brief Transform the given direction vector by the
-         * transformational inverse of this matrix.
-         */
         Vector3 transformInverseDirection(const Vector3 &vector) const
         {
             return Vector3(
