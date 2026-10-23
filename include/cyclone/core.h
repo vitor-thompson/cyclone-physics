@@ -205,12 +205,16 @@ namespace cyclone {
 
     /**
      * @brief Holds an inertia tensor, consisting of a 3x3 row-major matrix.
+     * This matrix is not padding to produce an aligned structure, since
+     * it is most commonly used with a mass (single real) and two
+     * damping coefficients to make the 12-element characteristics array
+     * of a rigid body.
      */
     class Matrix3
     {
     public:
         /**
-         * @brief Holds the tensor matrix data in array form (9 elements).
+         * @brief Holds the tensor matrix data in array form.
          */
         real data[9];
 
@@ -247,22 +251,21 @@ namespace cyclone {
         }
 
         /**
-         * @brief Multiplica esta matriz por outra Matrix3.
+         * @brief Returns a matrix that is this matrix multiplied by the given
+         * other matrix.
          */
         Matrix3 operator*(const Matrix3& o) const
         {
             return Matrix3(
-                data[0] * o.data[0] + data[1] * o.data[3] + data[2] * o.data[6],
-                data[0] * o.data[1] + data[1] * o.data[4] + data[2] * o.data[7],
-                data[0] * o.data[2] + data[1] * o.data[5] + data[2] * o.data[8],
-
-                data[3] * o.data[0] + data[4] * o.data[3] + data[5] * o.data[6],
-                data[3] * o.data[1] + data[4] * o.data[4] + data[5] * o.data[7],
-                data[3] * o.data[2] + data[4] * o.data[5] + data[5] * o.data[8],
-
-                data[6] * o.data[0] + data[7] * o.data[3] + data[8] * o.data[6],
-                data[6] * o.data[1] + data[7] * o.data[4] + data[8] * o.data[7],
-                data[6] * o.data[2] + data[7] * o.data[5] + data[8] * o.data[8]
+                data[0]*o.data[0] + data[1]*o.data[3] + data[2]*o.data[6],
+                data[0]*o.data[1] + data[1]*o.data[4] + data[2]*o.data[7],
+                data[0]*o.data[2] + data[1]*o.data[5] + data[2]*o.data[8],
+                data[3]*o.data[0] + data[4]*o.data[3] + data[5]*o.data[6],
+                data[3]*o.data[1] + data[4]*o.data[4] + data[5]*o.data[7],
+                data[3]*o.data[2] + data[4]*o.data[5] + data[5]*o.data[8],
+                data[6]*o.data[0] + data[7]*o.data[3] + data[8]*o.data[6],
+                data[6]*o.data[1] + data[7]*o.data[4] + data[8]*o.data[7],
+                data[6]*o.data[2] + data[7]*o.data[5] + data[8]*o.data[8]
             );
         }
     };
@@ -276,7 +279,7 @@ namespace cyclone {
     {
     public:
         /**
-         * @brief Holds the transform matrix data in array form (12 elements).
+         * @brief Holds the transform matrix data in array form.
          */
         real data[12];
 
@@ -310,25 +313,27 @@ namespace cyclone {
         }
 
         /**
-         * @brief Multiplica esta matriz de transformação por outra Matrix4.
+         * @brief Returns a matrix that is this matrix multiplied by the given
+         * other matrix.
          */
         Matrix4 operator*(const Matrix4& o) const
         {
             Matrix4 result;
-            result.data[0] = (o.data[0] * data[0]) + (o.data[4] * data[1]) + (o.data[8] * data[2]);
-            result.data[1] = (o.data[1] * data[0]) + (o.data[5] * data[1]) + (o.data[9] * data[2]);
-            result.data[2] = (o.data[2] * data[0]) + (o.data[6] * data[1]) + (o.data[10] * data[2]);
-            result.data[3] = (o.data[3] * data[0]) + (o.data[7] * data[1]) + (o.data[11] * data[2]) + data[3];
+            result.data[0] = (o.data[0]*data[0]) + (o.data[4]*data[1]) + (o.data[8]*data[2]);
+            result.data[4] = (o.data[0]*data[4]) + (o.data[4]*data[5]) + (o.data[8]*data[6]);
+            result.data[8] = (o.data[0]*data[8]) + (o.data[4]*data[9]) + (o.data[8]*data[10]);
 
-            result.data[4] = (o.data[0] * data[4]) + (o.data[4] * data[5]) + (o.data[8] * data[6]);
-            result.data[5] = (o.data[1] * data[4]) + (o.data[5] * data[5]) + (o.data[9] * data[6]);
-            result.data[6] = (o.data[2] * data[4]) + (o.data[6] * data[5]) + (o.data[10] * data[6]);
-            result.data[7] = (o.data[3] * data[4]) + (o.data[7] * data[5]) + (o.data[11] * data[6]) + data[7];
+            result.data[1] = (o.data[1]*data[0]) + (o.data[5]*data[1]) + (o.data[9]*data[2]);
+            result.data[5] = (o.data[1]*data[4]) + (o.data[5]*data[5]) + (o.data[9]*data[6]);
+            result.data[9] = (o.data[1]*data[8]) + (o.data[5]*data[9]) + (o.data[9]*data[10]);
 
-            result.data[8] = (o.data[0] * data[8]) + (o.data[4] * data[9]) + (o.data[8] * data[10]);
-            result.data[9] = (o.data[1] * data[8]) + (o.data[5] * data[9]) + (o.data[9] * data[10]);
-            result.data[10] = (o.data[2] * data[8]) + (o.data[6] * data[9]) + (o.data[10] * data[10]);
-            result.data[11] = (o.data[3] * data[8]) + (o.data[7] * data[9]) + (o.data[11] * data[10]) + data[11];
+            result.data[2] = (o.data[2]*data[0]) + (o.data[6]*data[1]) + (o.data[10]*data[2]);
+            result.data[6] = (o.data[2]*data[4]) + (o.data[6]*data[5]) + (o.data[10]*data[6]);
+            result.data[10] = (o.data[2]*data[8]) + (o.data[6]*data[9]) + (o.data[10]*data[10]);
+
+            result.data[3] = (o.data[3]*data[0]) + (o.data[7]*data[1]) + (o.data[11]*data[2]) + data[3];
+            result.data[7] = (o.data[3]*data[4]) + (o.data[7]*data[5]) + (o.data[11]*data[6]) + data[7];
+            result.data[11] = (o.data[3]*data[8]) + (o.data[7]*data[9]) + (o.data[11]*data[10]) + data[11];
 
             return result;
         }
