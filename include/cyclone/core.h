@@ -205,16 +205,12 @@ namespace cyclone {
 
     /**
      * @brief Holds an inertia tensor, consisting of a 3x3 row-major matrix.
-     * This matrix is not padding to produce an aligned structure, since
-     * it is most commonly used with a mass (single real) and two
-     * damping coefficients to make the 12-element characteristics array
-     * of a rigid body.
      */
     class Matrix3
     {
     public:
         /**
-         * @brief Holds the tensor matrix data in array form.
+         * @brief Holds the tensor matrix data in array form (9 elements).
          */
         real data[9];
 
@@ -251,8 +247,7 @@ namespace cyclone {
         }
 
         /**
-         * @brief Returns a matrix that is this matrix multiplied by the given
-         * other matrix.
+         * @brief Multiplica esta matriz por outra Matrix3.
          */
         Matrix3 operator*(const Matrix3& o) const
         {
@@ -268,18 +263,60 @@ namespace cyclone {
                 data[6]*o.data[2] + data[7]*o.data[5] + data[8]*o.data[8]
             );
         }
+
+        /**
+         * @brief Define esta matriz como a inversa da matriz fornecida.
+         */
+        void setInverse(const Matrix3 &m)
+        {
+            real t4 = m.data[0]*m.data[4];
+            real t6 = m.data[0]*m.data[5];
+            real t8 = m.data[1]*m.data[3];
+            real t10 = m.data[2]*m.data[3];
+            real t12 = m.data[1]*m.data[6];
+            real t14 = m.data[2]*m.data[6];
+            
+            real t16 = (t4*m.data[8] - t6*m.data[7] - t8*m.data[8] +
+                       t10*m.data[7] + t12*m.data[5] - t14*m.data[4]);
+
+            if (t16 == (real)0.0f) return;
+            real t17 = 1/t16;
+            
+            data[0] = (m.data[4]*m.data[8]-m.data[5]*m.data[7])*t17;
+            data[1] = -(m.data[1]*m.data[8]-m.data[2]*m.data[7])*t17;
+            data[2] = (m.data[1]*m.data[5]-m.data[2]*m.data[4])*t17;
+            data[3] = -(m.data[3]*m.data[8]-m.data[5]*m.data[6])*t17;
+            data[4] = (m.data[0]*m.data[8]-t14)*t17;
+            data[5] = -(t6-t10)*t17;
+            data[6] = (m.data[3]*m.data[7]-m.data[4]*m.data[6])*t17;
+            data[7] = -(m.data[0]*m.data[7]-t12)*t17;
+            data[8] = (t4-t8)*t17;
+        }
+
+        /** Retorna uma nova matriz contendo a inversa desta matriz. */
+        Matrix3 inverse() const
+        {
+            Matrix3 result;
+            result.setInverse(*this);
+            return result;
+        }
+
+        /** Inverte esta matriz. */
+        void invert()
+        {
+            setInverse(*this);
+        }
     };
 
     /**
      * @brief Holds a transform matrix, consisting of a rotation matrix and
-     * a position. The matrix has 12 elements; it is assumed that the
-     * remaining four are (0,0,0,1), producing a homogenous matrix.
+     * a position. The matrix has 12 elements (3x4 homogênea).
      */
     class Matrix4
     {
     public:
         /**
-         * @brief Holds the transform matrix data in array form.
+         * @brief Holds the transform matrix data in array form (12 elements).
          */
         real data[12];
 
@@ -294,8 +331,7 @@ namespace cyclone {
         }
 
         /**
-         * @brief Transform the given vector by this matrix.
-         * @param vector The vector to transform.
+         * @brief Transforma o vetor dado por esta matriz.
          */
         Vector3 operator*(const Vector3& vector) const
         {
@@ -313,8 +349,7 @@ namespace cyclone {
         }
 
         /**
-         * @brief Returns a matrix that is this matrix multiplied by the given
-         * other matrix.
+         * @brief Multiplica esta matriz de transformação por outra Matrix4.
          */
         Matrix4 operator*(const Matrix4& o) const
         {
@@ -336,6 +371,76 @@ namespace cyclone {
             result.data[11] = (o.data[3]*data[8]) + (o.data[7]*data[9]) + (o.data[11]*data[10]) + data[11];
 
             return result;
+        }
+
+        /**
+         * @brief Retorna o determinante da matriz de transformação.
+         */
+        real getDeterminant() const
+        {
+            return data[8]*data[5]*data[2]+
+                   data[4]*data[9]*data[2]+
+                   data[8]*data[1]*data[6]-
+                   data[0]*data[9]*data[6]-
+                   data[4]*data[1]*data[10]+
+                   data[0]*data[5]*data[10];
+        }
+
+        /**
+         * @brief Define esta matriz como a inversa da matriz de transformação fornecida.
+         */
+        void setInverse(const Matrix4 &m)
+        {
+            real det = getDeterminant();
+            if (det == 0) return;
+            det = ((real)1.0)/det;
+
+            data[0] = (-m.data[9]*m.data[6]+m.data[5]*m.data[10])*det;
+            data[4] = (m.data[8]*m.data[6]-m.data[4]*m.data[10])*det;
+            data[8] = (-m.data[8]*m.data[5]+m.data[4]*m.data[9])*det;
+
+            data[1] = (m.data[9]*m.data[2]-m.data[1]*m.data[10])*det;
+            data[5] = (-m.data[8]*m.data[2]+m.data[0]*m.data[10])*det;
+            data[9] = (m.data[8]*m.data[1]-m.data[0]*m.data[9])*det;
+
+            data[2] = (-m.data[5]*m.data[2]+m.data[1]*m.data[6])*det;
+            data[6] = (m.data[4]*m.data[2]-m.data[0]*m.data[6])*det;
+            data[10] = (-m.data[4]*m.data[1]+m.data[0]*m.data[5])*det;
+
+            data[3] = (m.data[9]*m.data[6]*m.data[3]
+                     - m.data[5]*m.data[10]*m.data[3]
+                     - m.data[9]*m.data[2]*m.data[7]
+                     + m.data[1]*m.data[10]*m.data[7]
+                     + m.data[5]*m.data[2]*m.data[11]
+                     - m.data[1]*m.data[6]*m.data[11])*det;
+
+            data[7] = (-m.data[8]*m.data[6]*m.data[3]
+                     + m.data[4]*m.data[10]*m.data[3]
+                     + m.data[8]*m.data[2]*m.data[7]
+                     - m.data[0]*m.data[10]*m.data[7]
+                     - m.data[4]*m.data[2]*m.data[11]
+                     + m.data[0]*m.data[6]*m.data[11])*det;
+
+            data[11] = (m.data[8]*m.data[5]*m.data[3]
+                      - m.data[4]*m.data[9]*m.data[3]
+                      - m.data[8]*m.data[1]*m.data[7]
+                      + m.data[0]*m.data[9]*m.data[7]
+                      + m.data[4]*m.data[1]*m.data[11]
+                      - m.data[0]*m.data[5]*m.data[11])*det;
+        }
+
+        /** Retorna uma nova matriz contendo a inversa desta matriz. */
+        Matrix4 inverse() const
+        {
+            Matrix4 result;
+            result.setInverse(*this);
+            return result;
+        }
+
+        /** Inverte esta matriz. */
+        void invert()
+        {
+            setInverse(*this);
         }
     };
 }
