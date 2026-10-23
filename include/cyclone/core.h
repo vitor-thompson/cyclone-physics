@@ -247,6 +247,27 @@ namespace cyclone {
          * @brief Construtor explícito com valores fornecidos.
          */
         Quaternion(real r, real i, real j, real k) : r(r), i(i), j(j), k(k) {}
+
+        /**
+         * @brief Normalizes the quaternion to unit length, making it a valid
+         * orientation quaternion.
+         */
+        void normalize()
+        {
+            real d = r*r + i*i + j*j + k*k;
+            // Check for zero length quaternion, and use the no-rotation
+            // quaternion in that case.
+            if (d == 0) {
+                r = 1;
+                return;
+            }
+
+            d = ((real)1.0)/real_sqrt(d);
+            r *= d;
+            i *= d;
+            j *= d;
+            k *= d;
+        }
     };
 
     /**
