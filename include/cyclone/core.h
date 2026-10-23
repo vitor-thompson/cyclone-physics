@@ -268,6 +268,23 @@ namespace cyclone {
             j *= d;
             k *= d;
         }
+
+        /**
+         * @brief Multiplies the quaternion by the given quaternion.
+         * @param multiplier The quaternion by which to multiply.
+         */
+        void operator *=(const Quaternion &multiplier)
+        {
+            Quaternion q = *this;
+            r = q.r*multiplier.r - q.i*multiplier.i -
+                q.j*multiplier.j - q.k*multiplier.k;
+            i = q.r*multiplier.i + q.i*multiplier.r +
+                q.j*multiplier.k - q.k*multiplier.j;
+            j = q.r*multiplier.j + q.j*multiplier.r +
+                q.k*multiplier.i - q.i*multiplier.k;
+            k = q.r*multiplier.k + q.k*multiplier.r +
+                q.i*multiplier.j - q.j*multiplier.i;
+        }
     };
 
     /**
