@@ -204,6 +204,52 @@ namespace cyclone {
     };
 
     /**
+     * @brief Holds a three degree of freedom orientation.
+     */
+    class Quaternion
+    {
+    public:
+        union {
+            struct {
+                /**
+                 * @brief Holds the real component of the quaternion.
+                 */
+                real r;
+
+                /**
+                 * @brief Holds the first complex component of the quaternion.
+                 */
+                real i;
+
+                /**
+                 * @brief Holds the second complex component of the quaternion.
+                 */
+                real j;
+
+                /**
+                 * @brief Holds the third complex component of the quaternion.
+                 */
+                real k;
+            };
+
+            /**
+             * @brief Holds the quaternion data in array form.
+             */
+            real data[4];
+        };
+
+        /**
+         * @brief Construtor padrão. Inicializa como um quatérnion identidade (1, 0, 0, 0).
+         */
+        Quaternion() : r(1), i(0), j(0), k(0) {}
+
+        /**
+         * @brief Construtor explícito com valores fornecidos.
+         */
+        Quaternion(real r, real i, real j, real k) : r(r), i(i), j(j), k(k) {}
+    };
+
+    /**
      * @brief Holds an inertia tensor, consisting of a 3x3 row-major matrix.
      * This matrix is not padding to produce an aligned structure, since
      * it is most commonly used with a mass (single real) and two
@@ -344,7 +390,18 @@ namespace cyclone {
          * @brief Sets this matrix to be the rotation matrix corresponding to
          * the given quaternion.
          */
-        void setOrientation(const class Quaternion &q);
+        void setOrientation(const Quaternion &q)
+        {
+            data[0] = 1 - (2*q.j*q.j + 2*q.k*q.k);
+            data[1] = 2*q.i*q.j + 2*q.k*q.r;
+            data[2] = 2*q.i*q.k - 2*q.j*q.r;
+            data[3] = 2*q.i*q.j - 2*q.k*q.r;
+            data[4] = 1 - (2*q.i*q.i + 2*q.k*q.k);
+            data[5] = 2*q.j*q.k + 2*q.i*q.r;
+            data[6] = 2*q.i*q.k + 2*q.j*q.r;
+            data[7] = 2*q.j*q.k - 2*q.i*q.r;
+            data[8] = 1 - (2*q.i*q.i + 2*q.j*q.j);
+        }
     };
 
     /**
@@ -446,7 +503,7 @@ namespace cyclone {
          * @brief Sets this matrix to be the rotation matrix and position corresponding to
          * the given quaternion and vector.
          */
-        void setOrientationAndPos(const class Quaternion &q, const Vector3 &pos)
+        void setOrientationAndPos(const Quaternion &q, const Vector3 &pos)
         {
             data[0] = 1 - (2*q.j*q.j + 2*q.k*q.k);
             data[1] = 2*q.i*q.j + 2*q.k*q.r;
