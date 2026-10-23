@@ -285,6 +285,17 @@ namespace cyclone {
             k = q.r*multiplier.k + q.k*multiplier.r +
                 q.i*multiplier.j - q.j*multiplier.i;
         }
+
+        /**
+         * @brief Rotaciona o quatérnion por um vetor de rotação (com um fator de escala).
+         * @param vector O vetor representando a velocidade ou mudança angular.
+         * @param scale O fator de escala (geralmente o delta time `dt`).
+         */
+        void rotateByVector(const Vector3 &vector, real scale)
+        {
+            Quaternion q(0, vector.x * scale, vector.y * scale, vector.z * scale);
+            (*this) *= q;
+        }
     };
 
     /**
