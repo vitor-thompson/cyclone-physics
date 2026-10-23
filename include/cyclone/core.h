@@ -269,7 +269,8 @@ namespace cyclone {
 
     /**
      * @brief Holds a transform matrix, consisting of a rotation matrix and
-     * a position. The matrix has 12 elements (3x4).
+     * a position. The matrix has 12 elements; it is assumed that the
+     * remaining four are (0,0,0,1), producing a homogenous matrix.
      */
     class Matrix4
     {
@@ -290,14 +291,21 @@ namespace cyclone {
         }
 
         /**
-         * @brief Transforma um vetor usando a matriz de transformação 3x4.
+         * @brief Transform the given vector by this matrix.
+         * @param vector The vector to transform.
          */
         Vector3 operator*(const Vector3& vector) const
         {
             return Vector3(
-                data[0] * vector.x + data[1] * vector.y + data[2] * vector.z + data[3],
-                data[4] * vector.x + data[5] * vector.y + data[6] * vector.z + data[7],
-                data[8] * vector.x + data[9] * vector.y + data[10] * vector.z + data[11]
+                vector.x * data[0] +
+                vector.y * data[1] +
+                vector.z * data[2] + data[3],
+                vector.x * data[4] +
+                vector.y * data[5] +
+                vector.z * data[6] + data[7],
+                vector.x * data[8] +
+                vector.y * data[9] +
+                vector.z * data[10] + data[11]
             );
         }
 
