@@ -339,6 +339,12 @@ namespace cyclone {
             result.setTranspose(*this);
             return result;
         }
+
+        /**
+         * @brief Sets this matrix to be the rotation matrix corresponding to
+         * the given quaternion.
+         */
+        void setOrientation(const class Quaternion &q);
     };
 
     /**
@@ -434,6 +440,26 @@ namespace cyclone {
         void invert()
         {
             setInverse(*this);
+        }
+
+        /**
+         * @brief Sets this matrix to be the rotation matrix and position corresponding to
+         * the given quaternion and vector.
+         */
+        void setOrientationAndPos(const class Quaternion &q, const Vector3 &pos)
+        {
+            data[0] = 1 - (2*q.j*q.j + 2*q.k*q.k);
+            data[1] = 2*q.i*q.j + 2*q.k*q.r;
+            data[2] = 2*q.i*q.k - 2*q.j*q.r;
+            data[3] = pos.x;
+            data[4] = 2*q.i*q.j - 2*q.k*q.r;
+            data[5] = 1 - (2*q.i*q.i + 2*q.k*q.k);
+            data[6] = 2*q.j*q.k + 2*q.i*q.r;
+            data[7] = pos.y;
+            data[8] = 2*q.i*q.k + 2*q.j*q.r;
+            data[9] = 2*q.j*q.k - 2*q.i*q.r;
+            data[10] = 1 - (2*q.i*q.i + 2*q.j*q.j);
+            data[11] = pos.z;
         }
     };
 }
