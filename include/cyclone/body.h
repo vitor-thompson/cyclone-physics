@@ -9,39 +9,33 @@ namespace cyclone {
     class RigidBody
     {
     public:
-        /**
-         * @brief Holds the inverse of the mass of the rigid body.
-         */
+        // --- PROPRIEDADES LINEARES ---
         real inverseMass;
-
-        /**
-         * @brief Holds the linear position of the rigid body in world space.
-         */
         Vector3 position;
-
-        /**
-         * @brief Holds the angular orientation of the rigid body in world space.
-         */
-        Quaternion orientation;
-
-        /**
-         * @brief Holds the linear velocity of the rigid body in world space.
-         */
         Vector3 velocity;
 
-        /**
-         * @brief Holds the angular velocity, or rotation, of the rigid body in world space.
-         */
+        // --- PROPRIEDADES ROTACIONAIS ---
+        Quaternion orientation;
         Vector3 rotation;
-
+        
         /**
-         * @brief Holds a transform matrix for converting body space into world space and vice versa.
+         * @brief Holds the inverse of the body’s inertia tensor.
+         * @details Dado no espaço local do corpo (body space).
          */
+        Matrix3 inverseInertiaTensor;
+
+        // --- DADOS DERIVADOS (CACHE) ---
         Matrix4 transformMatrix;
 
         /**
          * @brief Calculates internal data from state data.
          */
         void calculateDerivedData();
+
+        /**
+         * @brief Sets the inertia tensor for the rigid body.
+         * @param inertiaTensor The tensor to set (will be inverted and stored).
+         */
+        void setInertiaTensor(const Matrix3 &inertiaTensor);
     };
 }
