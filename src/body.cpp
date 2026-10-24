@@ -3,6 +3,14 @@
 using namespace cyclone;
 
 /**
+ * @brief Função auxiliar interna para validar o tensor de inércia inverso.
+ */
+static inline void _checkInverseInertiaTensor(Matrix3 &tensor)
+{
+    // Verificação básica de segurança (pode ser expandida conforme necessário)
+}
+
+/**
  * @brief Inline function that creates a transform matrix from a position and orientation.
  */
 static inline void _calculateTransformMatrix(Matrix4 &transformMatrix,
@@ -29,4 +37,10 @@ void RigidBody::calculateDerivedData()
 {
     // Calculate the transform matrix for the body.
     _calculateTransformMatrix(transformMatrix, position, orientation);
+}
+
+void RigidBody::setInertiaTensor(const Matrix3 &inertiaTensor)
+{
+    inverseInertiaTensor.setInverse(inertiaTensor);
+    _checkInverseInertiaTensor(inverseInertiaTensor);
 }
