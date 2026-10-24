@@ -2,17 +2,8 @@
 
 using namespace cyclone;
 
-/**
- * @brief Função auxiliar interna para validar o tensor de inércia inverso.
- */
-static inline void _checkInverseInertiaTensor(Matrix3 &tensor)
-{
-    // Verificação básica de segurança
-}
+static inline void _checkInverseInertiaTensor(Matrix3 &tensor) {}
 
-/**
- * @brief Inline function that creates a transform matrix from a position and orientation.
- */
 static inline void _calculateTransformMatrix(Matrix4 &transformMatrix,
                                              const Vector3 &position,
                                              const Quaternion &orientation)
@@ -33,41 +24,20 @@ static inline void _calculateTransformMatrix(Matrix4 &transformMatrix,
     transformMatrix.data[11] = position.z;
 }
 
-/**
- * @brief Internal function to do an inertia tensor transform by a quaternion/matrix.
- */
 static inline void _transformInertiaTensor(Matrix3 &iitWorld,
                                            const Quaternion &q,
                                            const Matrix3 &iitBody,
                                            const Matrix4 &rotmat)
 {
-    real t4 = rotmat.data[0]*iitBody.data[0] +
-              rotmat.data[1]*iitBody.data[3] +
-              rotmat.data[2]*iitBody.data[6];
-    real t9 = rotmat.data[0]*iitBody.data[1] +
-              rotmat.data[1]*iitBody.data[4] +
-              rotmat.data[2]*iitBody.data[7];
-    real t14 = rotmat.data[0]*iitBody.data[2] +
-               rotmat.data[1]*iitBody.data[5] +
-               rotmat.data[2]*iitBody.data[8];
-    real t28 = rotmat.data[4]*iitBody.data[0] +
-               rotmat.data[5]*iitBody.data[3] +
-               rotmat.data[6]*iitBody.data[6];
-    real t33 = rotmat.data[4]*iitBody.data[1] +
-               rotmat.data[5]*iitBody.data[4] +
-               rotmat.data[6]*iitBody.data[7];
-    real t38 = rotmat.data[4]*iitBody.data[2] +
-               rotmat.data[5]*iitBody.data[5] +
-               rotmat.data[6]*iitBody.data[8];
-    real t52 = rotmat.data[8]*iitBody.data[0] +
-               rotmat.data[9]*iitBody.data[3] +
-               rotmat.data[10]*iitBody.data[6];
-    real t57 = rotmat.data[8]*iitBody.data[1] +
-               rotmat.data[9]*iitBody.data[4] +
-               rotmat.data[10]*iitBody.data[7];
-    real t62 = rotmat.data[8]*iitBody.data[2] +
-               rotmat.data[9]*iitBody.data[5] +
-               rotmat.data[10]*iitBody.data[8];
+    real t4 = rotmat.data[0]*iitBody.data[0] + rotmat.data[1]*iitBody.data[3] + rotmat.data[2]*iitBody.data[6];
+    real t9 = rotmat.data[0]*iitBody.data[1] + rotmat.data[1]*iitBody.data[4] + rotmat.data[2]*iitBody.data[7];
+    real t14 = rotmat.data[0]*iitBody.data[2] + rotmat.data[1]*iitBody.data[5] + rotmat.data[2]*iitBody.data[8];
+    real t28 = rotmat.data[4]*iitBody.data[0] + rotmat.data[5]*iitBody.data[3] + rotmat.data[6]*iitBody.data[6];
+    real t33 = rotmat.data[4]*iitBody.data[1] + rotmat.data[5]*iitBody.data[4] + rotmat.data[6]*iitBody.data[7];
+    real t38 = rotmat.data[4]*iitBody.data[2] + rotmat.data[5]*iitBody.data[5] + rotmat.data[6]*iitBody.data[8];
+    real t52 = rotmat.data[8]*iitBody.data[0] + rotmat.data[9]*iitBody.data[3] + rotmat.data[10]*iitBody.data[6];
+    real t57 = rotmat.data[8]*iitBody.data[1] + rotmat.data[9]*iitBody.data[4] + rotmat.data[10]*iitBody.data[7];
+    real t62 = rotmat.data[8]*iitBody.data[2] + rotmat.data[9]*iitBody.data[5] + rotmat.data[10]*iitBody.data[8];
 
     iitWorld.data[0] = t4*rotmat.data[0] + t9*rotmat.data[1] + t14*rotmat.data[2];
     iitWorld.data[1] = t4*rotmat.data[4] + t9*rotmat.data[5] + t14*rotmat.data[6];
@@ -82,18 +52,45 @@ static inline void _transformInertiaTensor(Matrix3 &iitWorld,
 
 void RigidBody::calculateDerivedData()
 {
-    // Calculate the transform matrix for the body.
     _calculateTransformMatrix(transformMatrix, position, orientation);
-
-    // Calculate the inertiaTensor in world space.
-    _transformInertiaTensor(inverseInertiaTensorWorld,
-                            orientation,
-                            inverseInertiaTensor,
-                            transformMatrix);
+    _transformInertiaTensor(inverseInertiaTensorWorld, orientation, inverseInertiaTensor, transformMatrix);
 }
 
 void RigidBody::setInertiaTensor(const Matrix3 &inertiaTensor)
 {
     inverseInertiaTensor.setInverse(inertiaTensor);
     _checkInverseInertiaTensor(inverseInertiaTensor);
+}
+
+void RigidBody::clearAccumulators()
+{
+    forceAccum = Vector3(0, 0, 0);
+    torqueAccum = Vector3(0, 0, 0);
+}
+
+void RigidBody::addForce(const Vector3 &force)
+{
+    forceAccum += force;
+}
+
+void RigidBody::addForceAtPoint(const Vector3 &force, const Vector3 &point)
+{
+    // Converte o ponto para coordenadas relativas ao centro de massa
+    Vector3 pt = point - position;
+
+    forceAccum += force;
+    torqueAccum += pt % force; // Produto vetorial (pf x f)
+}
+
+void RigidBody::addForceAtBodyPoint(const Vector3 &force, const Vector3 &point)
+{
+    // Converte o ponto local (body space) para o espaço mundial
+    Vector3 pt = getPointInWorldSpace(point);
+    addForceAtPoint(force, pt);
+}
+
+void RigidBody::integrate(real duration)
+{
+    // Limpa os acumuladores no início do processo de integração
+    clearAccumulators();
 }
