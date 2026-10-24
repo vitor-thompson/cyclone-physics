@@ -62,5 +62,33 @@ namespace cyclone {
          * @brief Executa a integração do corpo rígido para um determinado intervalo de tempo.
          */
         void integrate(real duration);
+
+        /**
+         * @brief Verifica se o corpo possui massa finita (não é imóvel).
+         */
+        bool hasFiniteMass() const
+        {
+            return inverseMass > 0.0f;
+        }
+
+        /**
+         * @brief Retorna a massa do corpo rígido.
+         */
+        real getMass() const
+        {
+            if (inverseMass == 0.0f) {
+                return ((real)INF); // Ou um valor muito alto se INF não estiver definido
+            } else {
+                return ((real)1.0) / inverseMass;
+            }
+        }
+
+        /**
+         * @brief Adiciona torque diretamente ao acumulador de torques.
+         */
+        void addTorque(const Vector3 &torque)
+        {
+            torqueAccum += torque;
+        }
     };
 }
