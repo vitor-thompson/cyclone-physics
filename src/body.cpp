@@ -52,6 +52,7 @@ static inline void _transformInertiaTensor(Matrix3 &iitWorld,
 
 void RigidBody::calculateDerivedData()
 {
+    orientation.normalize();
     _calculateTransformMatrix(transformMatrix, position, orientation);
     _transformInertiaTensor(inverseInertiaTensorWorld, orientation, inverseInertiaTensor, transformMatrix);
 }
@@ -75,22 +76,48 @@ void RigidBody::addForce(const Vector3 &force)
 
 void RigidBody::addForceAtPoint(const Vector3 &force, const Vector3 &point)
 {
-    // Converte o ponto para coordenadas relativas ao centro de massa
     Vector3 pt = point - position;
-
     forceAccum += force;
-    torqueAccum += pt % force; // Produto vetorial (pf x f)
+    torqueAccum += pt % force;
 }
 
 void RigidBody::addForceAtBodyPoint(const Vector3 &force, const Vector3 &point)
 {
-    // Converte o ponto local (body space) para o espaço mundial
     Vector3 pt = getPointInWorldSpace(point);
     addForceAtPoint(force, pt);
 }
 
+void RigidBody::addTorque(const Vector3 &torque)
+{
+    torqueAccum += torque;
+}
+
 void RigidBody::integrate(real duration)
 {
-    // Limpa os acumuladores no início do processo de integração
+    if (inverseMass <= 0.0f) return;
+
+    // 1. Calcula aceleração linear a partir das forças
+    lastFrameAcceleration = acceleration;
+    lastFrameAcceleration.addScaledVector(forceAccum, inverseMass);
+
+    // 2. Calcula aceleração angular a partir dos torques (I_world^-1 * torque)
+    Vector3 angularAcceleration = inverseInertiaTensorWorld * torqueAccum;
+
+    // 3. Atualiza velocidades lineares e angulares
+    velocity.addScaledVector(lastFrameAcceleration, duration);
+    rotation.addScaledVector(angularAcceleration, duration);
+
+    // 4. Aplica o amortecimento (drag)
+    velocity *= real_pow(linearDamping, duration);
+    rotation *= real_pow(angularDamping, duration);
+
+    // 5. Atualiza posições lineares e orientações
+    position.addScaledVector(velocity, duration);
+    orientation.rotateByVector(rotation, duration);
+
+    // 6. Recalcula dados derivados e normaliza o quatérnion
+    calculateDerivedData();
+
+    // 7. Limpa os acumuladores para o próximo quadro
     clearAccumulators();
 }
