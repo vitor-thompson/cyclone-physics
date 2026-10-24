@@ -19,13 +19,18 @@ namespace cyclone {
         Vector3 rotation;
         
         /**
-         * @brief Holds the inverse of the body’s inertia tensor.
-         * @details Dado no espaço local do corpo (body space).
+         * @brief Holds the inverse of the body’s inertia tensor in body space.
          */
         Matrix3 inverseInertiaTensor;
 
         // --- DADOS DERIVADOS (CACHE) ---
         Matrix4 transformMatrix;
+
+        /**
+         * @brief Holds the inverse of the body's inertia tensor in world space.
+         * @details Derivado a cada quadro a partir de inverseInertiaTensor e da orientação.
+         */
+        Matrix3 inverseInertiaTensorWorld;
 
         /**
          * @brief Calculates internal data from state data.
@@ -34,7 +39,6 @@ namespace cyclone {
 
         /**
          * @brief Sets the inertia tensor for the rigid body.
-         * @param inertiaTensor The tensor to set (will be inverted and stored).
          */
         void setInertiaTensor(const Matrix3 &inertiaTensor);
     };
