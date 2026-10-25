@@ -3,24 +3,21 @@
 
 using namespace cyclone;
 
-// ==========================================
+// ============================================================================
 // --- GRAVIDADE ---
-// ==========================================
+// ============================================================================
 
 Gravity::Gravity(const Vector3 &gravity) : gravity(gravity) {}
 
 void Gravity::updateForce(RigidBody* body, real duration)
 {
-    // Verifica se o corpo tem massa finita (não é imóvel)
     if (!body->hasFiniteMass()) return;
-
-    // Aplica a força dimensionada pela massa direto no centro de massa
     body->addForce(gravity * body->getMass());
 }
 
-// ==========================================
+// ============================================================================
 // --- MOLA ---
-// ==========================================
+// ============================================================================
 
 Spring::Spring(const Vector3 &localConnectionPt,
                RigidBody *other,
@@ -35,70 +32,56 @@ Spring::Spring(const Vector3 &localConnectionPt,
 
 void Spring::updateForce(RigidBody* body, real duration)
 {
-    // Calcula as duas pontas da mola no espaço global (world space)
     Vector3 lws = body->getPointInWorldSpace(connectionPoint);
     Vector3 ows = other->getPointInWorldSpace(otherConnectionPoint);
 
-    // Calcula o vetor de deslocamento da mola
     Vector3 force = lws - ows;
 
-    // Calcula a magnitude da força com base na Lei de Hooke
     real magnitude = force.magnitude();
     magnitude = real_abs(magnitude - restLength);
     magnitude *= springConstant;
 
-    // Normaliza, aplica a direção oposta (puxar/empurrar) e aplica no ponto
     force.normalize();
     force *= -magnitude;
     body->addForceAtPoint(force, lws);
 }
 
-// ==========================================
-// --- AERODINÂMICA (AERO) ---
-// ==========================================
+// ============================================================================
+// --- AERODINÂMICA BASE (`Aero`) ---
+// ============================================================================
 
 Aero::Aero(const Matrix3 &tensor, const Vector3 &position, const Vector3 *windspeed)
     : tensor(tensor), position(position), windspeed(windspeed) {}
 
 void Aero::updateForce(RigidBody* body, real duration)
 {
-    updateForce(body, duration, tensor);
+    updateForceFromTensor(body, duration, tensor);
 }
 
-void Aero::updateForce(RigidBody* body, real duration, const Matrix3 &tensor)
+void Aero::updateForceFromTensor(RigidBody* body, real duration, const Matrix3 &tensorToUse)
 {
-    // 1. Calcula a velocidade do ar relativa à superfície no espaço global
-    Vector3 pointWorld = body->getPointInWorldSpace(position);
-    
-    // Velocidade linear no ponto de aplicação + contribuição da velocidade angular
-    // (v = velocity + rotation % r)
-    Vector3 vel = body->velocity;
-    // Se sua classe RigidBody possuir método para velocidade no ponto, pode utilizá-lo.
-    // Usando a aproximação padrão:
-    
-    // 2. Subtrai a velocidade do vento, se houver
-    Vector3 airSpeed = vel;
+    // 1. Velocidade do corpo na coordenada global
+    Vector3 velocity = body->velocity;
     if (windspeed) {
-        airSpeed -= *windspeed;
+        velocity -= *windspeed;
     }
 
-    // 3. Converte a velocidade do ar para o espaço local (body space) usando a rotação da matriz
-    // (Inverte apenas a direção, ignorando a translação)
-    Vector3 bVel = body->transformMatrix.transformInverseDirection(airSpeed);
+    // 2. Transforma a velocidade do ar para o espaço do corpo (body space)
+    Vector3 bVel = body->transformMatrix.transformInverseDirection(velocity);
 
-    // 4. Aplica o tensor aerodinâmico para obter a força no espaço local
-    Vector3 bForce = tensor * bVel;
+    // 3. Aplica o tensor aerodinâmico no espaço do corpo
+    Vector3 bForce = tensorToUse * bVel;
 
-    // 5. Converte a força resultante de volta para o espaço global
+    // 4. Converte a força resultante de volta para o espaço do mundo (world space)
     Vector3 force = body->transformMatrix.transformDirection(bForce);
 
-    // 6. Aplica a força no ponto específico do corpo
+    // 5. Aplica a força no ponto de conexão local da superfície
     body->addForceAtBodyPoint(force, position);
 }
 
-// ==========================================
-// --- CONTROLE AERODINÂMICO (AEROCONTROL) ---
-// ==========================================
+// ============================================================================
+// --- CONTROLE AERODINÂMICO (`AeroControl`) ---
+// ============================================================================
 
 AeroControl::AeroControl(const Matrix3 &base, const Matrix3 &min, const Matrix3 &max,
                            const Vector3 &position, const Vector3 *windspeed)
@@ -116,14 +99,12 @@ Matrix3 AeroControl::getTensor()
     } else if (controlSetting >= 1.0f) {
         return maxTensor;
     } else if (controlSetting < 0.0f) {
-        // Interpola entre minTensor e o tensor base (0)
         Matrix3 result;
         for (int i = 0; i < 9; i++) {
             result.data[i] = tensor.data[i] + (-controlSetting) * (minTensor.data[i] - tensor.data[i]);
         }
         return result;
     } else {
-        // Interpola entre o tensor base (0) e maxTensor
         Matrix3 result;
         for (int i = 0; i < 9; i++) {
             result.data[i] = tensor.data[i] + controlSetting * (maxTensor.data[i] - tensor.data[i]);
@@ -135,5 +116,81 @@ Matrix3 AeroControl::getTensor()
 void AeroControl::updateForce(RigidBody* body, real duration)
 {
     Matrix3 derivedTensor = getTensor();
-    Aero::updateForce(body, duration, derivedTensor);
+    updateForceFromTensor(body, duration, derivedTensor);
+}
+
+// ============================================================================
+// --- AERODINÂMICA ANGULAR/ROTATORIÁ (`AngledAero`) ---
+// ============================================================================
+
+AngledAero::AngledAero(const Matrix3 &tensor, const Vector3 &position, const Vector3 *windspeed)
+    : Aero(tensor, position, windspeed), orientation(Quaternion(1, 0, 0, 0)) {}
+
+void AngledAero::setOrientation(const Quaternion &quat)
+{
+    orientation = quat;
+}
+
+void AngledAero::updateForce(RigidBody* body, real duration)
+{
+    // Combina a orientação do corpo com a orientação da própria superfície (vela/leme)
+    Quaternion worldOrientation = body->orientation * orientation;
+
+    // Matriz de rotação temporária no espaço global
+    Matrix4 transform;
+    transform.setOrientationAndPosition(worldOrientation, body->getPointInWorldSpace(position));
+
+    // Velocidade relativa do ar
+    Vector3 velocity = body->velocity;
+    if (windspeed) {
+        velocity -= *windspeed;
+    }
+
+    // Transforma a velocidade para o espaço local da superfície
+    Vector3 bVel = transform.transformInverseDirection(velocity);
+
+    // Calcula a força com o tensor local
+    Vector3 bForce = tensor * bVel;
+
+    // Transforma a força para o mundo
+    Vector3 force = transform.transformDirection(bForce);
+
+    // Aplica no corpo no ponto de montagem
+    body->addForceAtBodyPoint(force, position);
+}
+
+// ============================================================================
+// --- EMPUXO / FLUTUAÇÃO (`Buoyancy`) ---
+// ============================================================================
+
+Buoyancy::Buoyancy(const Vector3 &cOfB,
+                   real maxDepth, real volume, real waterHeight,
+                   real liquidDensity)
+    : centerOfBuoyancy(cOfB),
+      maxDepth(maxDepth),
+      volume(volume),
+      waterHeight(waterHeight),
+      liquidDensity(liquidDensity) {}
+
+void Buoyancy::updateForce(RigidBody* body, real duration)
+{
+    // Posição do centro de flutuação no espaço mundial
+    Vector3 pointInWorld = body->getPointInWorldSpace(centerOfBuoyancy);
+    real depth = pointInWorld.y;
+
+    // 1. Fora d'água
+    if (depth >= waterHeight + maxDepth) return;
+
+    Vector3 force(0, 0, 0);
+
+    // 2. Submersão total
+    if (depth <= waterHeight - maxDepth) {
+        force.y = liquidDensity * volume;
+        body->addForceAtBodyPoint(force, centerOfBuoyancy);
+        return;
+    }
+
+    // 3. Submersão parcial
+    force.y = liquidDensity * volume * (waterHeight + maxDepth - depth) / (2.0f * maxDepth);
+    body->addForceAtBodyPoint(force, centerOfBuoyancy);
 }
