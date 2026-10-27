@@ -1,15 +1,59 @@
+#pragma once
+
+#include <cyclone/body.h>
+
 namespace cyclone {
 
+    /**
+     * @brief Armazena um par de corpos rígidos que podem estar em contato (potencial colisão).
+     */
+    struct PotentialContact
+    {
+        RigidBody* body[2];
+    };
+
+    /**
+     * @brief Representa uma esfera envolvente (bounding sphere) usada para testes rápidos de sobreposição.
+     */
+    struct BoundingSphere
+    {
+        Vector3 center;
+        real radius;
+
+    public:
+        /** Cria uma nova esfera envolvente com o centro e raio dados. */
+        BoundingSphere(const Vector3 &center, real radius);
+
+        /** Cria uma esfera envolvente que engloba outras duas esferas. */
+        BoundingSphere(const BoundingSphere &one, const BoundingSphere &two);
+
+        /** Verifica se esta esfera se sobrepõe a outra. */
+        bool overlaps(const BoundingSphere *other) const;
+
+        /** Calcula o quanto a esfera precisaria crescer para englobar uma nova esfera. */
+        real getGrowth(const BoundingSphere &other) const;
+    };
+
+    /**
+     * @brief Nó base em uma Hierarquia de Volumes Envolventes (BVH) usando árvore binária.
+     */
     template<class BoundingVolumeClass>
     class BVHNode
     {
     public:
+        /** Nós filhos desta árvore binária (até 2). */
         BVHNode *children[2];
+
+        /** Ponteiro para o nó pai. */
         BVHNode *parent;
+
+        /** Volume envolvente que engloba todos os descendentes deste nó. */
         BoundingVolumeClass volume;
+
+        /** Corpo rígido associado (apenas nós folha possuem um corpo válido). */
         RigidBody *body;
 
-        // Construtor para nós internos ou raiz
+        /** Construtor para nós internos ou raiz. */
         BVHNode(BVHNode *parent, const BoundingVolumeClass &volume, RigidBody *body = nullptr)
             : parent(parent), volume(volume), body(body)
         {
@@ -17,9 +61,9 @@ namespace cyclone {
             children[1] = nullptr;
         }
 
+        /** Destruidor limpa os nós filhos e reorganiza a árvore ao remover elementos. */
         ~BVHNode()
         {
-            // Se tivermos um pai, removemos este nó e promovemos o irmão
             if (parent)
             {
                 BVHNode<BoundingVolumeClass> *sibling;
@@ -43,7 +87,6 @@ namespace cyclone {
                 parent->recalculateBoundingVolume();
             }
 
-            // Deleta os filhos de forma segura
             if (children[0]) {
                 children[0]->parent = nullptr;
                 delete children[0];
@@ -54,11 +97,13 @@ namespace cyclone {
             }
         }
 
+        /** Verifica se este nó é uma folha (contém um corpo físico). */
         bool isLeaf() const
         {
             return (body != nullptr);
         }
 
+        /** Insere um novo corpo rígido e seu volume na hierarquia em tempo de execução. */
         void insert(RigidBody* newBody, const BoundingVolumeClass &newVolume)
         {
             if (isLeaf())
@@ -84,6 +129,15 @@ namespace cyclone {
             }
         }
 
+        /** Coleta potenciais contatos a partir deste nó para baixo. */
+        unsigned getPotentialContacts(PotentialContact* contacts, unsigned limit) const
+        {
+            if (isLeaf() || limit == 0) return 0;
+            return children[0]->getPotentialContactsWith(children[1], contacts, limit);
+        }
+
+    private:
+        /** Recalcula o volume do nó combinando os filhos. */
         void recalculateBoundingVolume()
         {
             if (isLeaf()) return;
@@ -91,6 +145,50 @@ namespace cyclone {
             if (parent) {
                 parent->recalculateBoundingVolume();
             }
+        }
+
+        /** Verifica potenciais contatos entre sub-árvores. */
+        unsigned getPotentialContactsWith(const BVHNode<BoundingVolumeClass> *other,
+                                          PotentialContact* contacts,
+                                          unsigned limit) const
+        {
+            if (!overlaps(other) || limit == 0) return 0;
+
+            if (isLeaf() && other->isLeaf())
+            {
+                contacts->body[0] = body;
+                contacts->body[1] = other->body;
+                return 1;
+            }
+
+            if (other->isLeaf() || (!isLeaf() && volume.getSize() >= other->volume.getSize()))
+            {
+                unsigned count = children[0]->getPotentialContactsWith(other, contacts, limit);
+                if (limit > count) {
+                    return count + children[1]->getPotentialContactsWith(other, contacts + count, limit - count);
+                } else {
+                    return count;
+                }
+            }
+            else
+            {
+                unsigned count = getPotentialContactsWith(other->children[0], contacts, limit);
+                if (limit > count) {
+                    return count + getPotentialContactsWith(other->children[1], contacts + count, limit - count);
+                } else {
+                    return count;
+                }
+            }
+        }
+
+        bool overlaps(const BVHNode<BoundingVolumeClass> *other) const
+        {
+            return volume.overlaps(&(other->volume));
+        }
+
+        // Método auxiliar para estimativa de tamanho (usado no balanceamento)
+        real getSize() const {
+            return volume.radius; // Simplificação baseada no raio da esfera
         }
     };
 
