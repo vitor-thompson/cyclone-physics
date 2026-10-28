@@ -234,7 +234,54 @@ namespace cyclone {
         return 1;
     }
 
-    // Função de colisão entre caixas (será implementada nas próximas seções)
+    unsigned CollisionDetector::boxAndPoint(
+        const Box &box,
+        const Vector3 &point,
+        CollisionData *data
+    )
+    {
+        if (data->contactsLeft <= 0) return 0;
+
+        // Transforma o ponto para as coordenadas locais da caixa.
+        Matrix4 transform = box.getTransform();
+        Vector3 relPt = transform.transformInverse(point);
+        Vector3 normal;
+
+        // Verifica cada eixo buscando a penetração menos profunda.
+        real min_depth = box.halfSize.x - real_abs(relPt.x);
+        if (min_depth < 0) return 0;
+        normal = box.getAxis(0) * ((relPt.x < 0) ? -1 : 1);
+
+        real depth = box.halfSize.y - real_abs(relPt.y);
+        if (depth < 0) return 0;
+        else if (depth < min_depth)
+        {
+            min_depth = depth;
+            normal = box.getAxis(1) * ((relPt.y < 0) ? -1 : 1);
+        }
+
+        depth = box.halfSize.z - real_abs(relPt.z);
+        if (depth < 0) return 0;
+        else if (depth < min_depth)
+        {
+            min_depth = depth;
+            normal = box.getAxis(2) * ((relPt.z < 0) ? -1 : 1);
+        }
+
+        Contact* contact = data->contacts;
+        contact->contactNormal = normal;
+        contact->contactPoint = point;
+        contact->penetration = min_depth;
+
+        contact->body[0] = box.body;
+        contact->body[1] = NULL;
+        contact->restitution = data->restitution;
+        contact->friction = data->friction;
+
+        return 1;
+    }
+
+    // Função de colisão entre caixas (será detalhada nas próximas implementações)
     unsigned CollisionDetector::boxAndBox(const Box &/*one*/, const Box &/*two*/, CollisionData *__restrict__ /*data*/)
     {
         return 0;
