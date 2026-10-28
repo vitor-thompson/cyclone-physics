@@ -27,7 +27,7 @@ namespace cyclone {
         /** Quantidade total de contatos encontrados até o momento. */
         unsigned contactCount;
 
-        /** Coeficientes globais de fricción e restituição padrão para os contatos. */
+        /** Coeficientes globais de fricção e restituição padrão para os contatos. */
         real friction;
         real restitution;
         real tolerance;
@@ -72,6 +72,12 @@ namespace cyclone {
         {
             return body->getTransform() * offset;
         }
+
+        /** Atalho para extrair um eixo ou vetor de posição da matriz transformada. */
+        Vector3 getAxis(unsigned index) const
+        {
+            return getTransform().getAxis(index);
+        }
     };
 
     /**
@@ -103,37 +109,43 @@ namespace cyclone {
         Vector3 halfSize;
     };
 
-    // --- Funções de Detecção e Geração de Contatos entre Primitivas ---
+    /**
+     * Classe estática responsável por agrupar os algoritmos de detecção fina
+     * e geração de contatos entre as diferentes primitivas geométricas.
+     */
+    class CollisionDetector
+    {
+    public:
+        static unsigned sphereAndSphere(
+            const Sphere &one,
+            const Sphere &two,
+            CollisionData *data
+        );
 
-    unsigned collideSphereAndSphere(
-        const Sphere &one,
-        const Sphere &two,
-        CollisionData *data
-    );
+        static unsigned sphereAndPlane(
+            const Sphere &sphere,
+            const Plane &plane,
+            CollisionData *data
+        );
 
-    unsigned collideSphereAndPlane(
-        const Sphere &sphere,
-        const Plane &plane,
-        CollisionData *data
-    );
+        static unsigned boxAndPlane(
+            const Box &box,
+            const Plane &plane,
+            CollisionData *data
+        );
 
-    unsigned collideBoxAndPlane(
-        const Box &box,
-        const Plane &plane,
-        CollisionData *data
-    );
+        static unsigned boxAndSphere(
+            const Box &box,
+            const Sphere &sphere,
+            CollisionData *data
+        );
 
-    unsigned collideBoxAndSphere(
-        const Box &box,
-        const Sphere &sphere,
-        CollisionData *data
-    );
-
-    unsigned collideBoxAndBox(
-        const Box &one,
-        const Box &two,
-        CollisionData *data
-    );
+        static unsigned boxAndBox(
+            const Box &one,
+            const Box &two,
+            CollisionData *data
+        );
+    };
 
 } // namespace cyclone
 
