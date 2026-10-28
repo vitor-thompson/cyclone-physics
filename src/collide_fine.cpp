@@ -117,12 +117,62 @@ namespace cyclone {
         return 1;
     }
 
-    // Funções de colisão com caixas (serão implementadas nas próximas seções)
-    unsigned CollisionDetector::boxAndPlane(const Box &/*box*/, const Plane &/*plane*/, CollisionData *__restrict__ /*data*/)
+    unsigned CollisionDetector::boxAndPlane(
+        const Box &box,
+        const Plane &plane,
+        CollisionData *data
+    )
     {
-        return 0;
+        // Certifica-se de que há espaço no vetor de contatos.
+        if (data->contactsLeft <= 0) return 0;
+
+        // Define os 8 vértices locais da caixa com base em halfSize.
+        Vector3 vertices[8] = {
+            Vector3(-box.halfSize.x, -box.halfSize.y, -box.halfSize.z),
+            Vector3(-box.halfSize.x, -box.halfSize.y,  box.halfSize.z),
+            Vector3(-box.halfSize.x,  box.halfSize.y, -box.halfSize.z),
+            Vector3(-box.halfSize.x,  box.halfSize.y,  box.halfSize.z),
+            Vector3( box.halfSize.x, -box.halfSize.y, -box.halfSize.z),
+            Vector3( box.halfSize.x, -box.halfSize.y,  box.halfSize.z),
+            Vector3( box.halfSize.x,  box.halfSize.y, -box.halfSize.z),
+            Vector3( box.halfSize.x,  box.halfSize.y,  box.halfSize.z)
+        };
+
+        Matrix4 transform = box.getTransform();
+        unsigned contactsUsed = 0;
+
+        // Testa cada vértice individualmente contra o plano.
+        for (unsigned i = 0; i < 8; i++)
+        {
+            // Transforma o vértice para o espaço global do mundo.
+            Vector3 vertexPos = transform * vertices[i];
+
+            // Calcula a distância do vértice ao plano.
+            real vertexDistance = vertexPos * plane.direction;
+
+            // Se o vértice penetrou o plano (abaixo da superfície), gera um ponto de contato.
+            if (vertexDistance <= plane.offset)
+            {
+                if (contactsUsed >= data->contactsLeft) break;
+
+                Contact *contact = data->contacts + contactsUsed;
+                contact->contactPoint = vertexPos;
+                contact->contactNormal = plane.direction;
+                contact->penetration = plane.offset - vertexDistance;
+
+                contact->body[0] = box.body;
+                contact->body[1] = NULL;
+                contact->restitution = data->restitution;
+                contact->friction = data->friction;
+
+                contactsUsed++;
+            }
+        }
+
+        return contactsUsed;
     }
 
+    // Funções de colisão restantes (serão implementadas nas próximas seções)
     unsigned CollisionDetector::boxAndSphere(const Box &/*box*/, const Sphere &/*sphere*/, CollisionData *__restrict__ /*data*/)
     {
         return 0;
