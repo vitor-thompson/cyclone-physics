@@ -172,12 +172,69 @@ namespace cyclone {
         return contactsUsed;
     }
 
-    // Funções de colisão restantes (serão implementadas nas próximas seções)
-    unsigned CollisionDetector::boxAndSphere(const Box &/*box*/, const Sphere &/*sphere*/, CollisionData *__restrict__ /*data*/)
+    unsigned CollisionDetector::boxAndSphere(
+        const Box &box,
+        const Sphere &sphere,
+        CollisionData *data
+    )
     {
-        return 0;
+        if (data->contactsLeft <= 0) return 0;
+
+        // Transforma o centro da esfera para as coordenadas locais da caixa.
+        Vector3 center = sphere.getAxis(3);
+        Matrix4 transform = box.getTransform();
+        Vector3 relCenter = transform.transformInverse(center);
+
+        // Teste rápido de eixo separador (early-out).
+        if (real_abs(relCenter.x) - sphere.radius > box.halfSize.x ||
+            real_abs(relCenter.y) - sphere.radius > box.halfSize.y ||
+            real_abs(relCenter.z) - sphere.radius > box.halfSize.z)
+        {
+            return 0;
+        }
+
+        Vector3 closestPt(0, 0, 0);
+        real dist;
+
+        // Limita (clamp) cada componente às dimensões da caixa.
+        dist = relCenter.x;
+        if (dist > box.halfSize.x) dist = box.halfSize.x;
+        if (dist < -box.halfSize.x) dist = -box.halfSize.x;
+        closestPt.x = dist;
+
+        dist = relCenter.y;
+        if (dist > box.halfSize.y) dist = box.halfSize.y;
+        if (dist < -box.halfSize.y) dist = -box.halfSize.y;
+        closestPt.y = dist;
+
+        dist = relCenter.z;
+        if (dist > box.halfSize.z) dist = box.halfSize.z;
+        if (dist < -box.halfSize.z) dist = -box.halfSize.z;
+        closestPt.z = dist;
+
+        // Verifica se a distância ao ponto mais próximo está dentro do raio.
+        dist = (closestPt - relCenter).squareMagnitude();
+        if (dist > sphere.radius * sphere.radius) return 0;
+
+        // Compila o contato em coordenadas do mundo.
+        Vector3 closestPtWorld = transform.transform(closestPt);
+
+        Contact* contact = data->contacts;
+        contact->contactNormal = center - closestPtWorld;
+        contact->contactNormal.normalize();
+        contact->contactPoint = closestPtWorld;
+        contact->penetration = sphere.radius - real_sqrt(dist);
+
+        // Associa os corpos e propriedades do material.
+        contact->body[0] = box.body;
+        contact->body[1] = sphere.body;
+        contact->restitution = data->restitution;
+        contact->friction = data->friction;
+
+        return 1;
     }
 
+    // Função de colisão entre caixas (será implementada nas próximas seções)
     unsigned CollisionDetector::boxAndBox(const Box &/*one*/, const Box &/*two*/, CollisionData *__restrict__ /*data*/)
     {
         return 0;
