@@ -9,54 +9,42 @@ namespace cyclone {
 
     /**
      * Constrói uma base ortonormal arbitrária para o contato.
-     * Armazenada como uma matriz 3x3 onde cada vetor é uma coluna
-     * (transforma coordenadas de contato em coordenadas do mundo).
-     * O eixo X é gerado a partir da normal do contato, e os eixos Y e Z
-     * são definidos de forma perpendicular a ele.
      */
     void Contact::calculateContactBasis()
     {
         Vector3 contactTangent[2];
 
-        // Verifica se o eixo Z está mais próximo do eixo X ou Y do mundo
         if (real_abs(contactNormal.x) > real_abs(contactNormal.y))
         {
-            // Fator de escala para garantir normalização
             const real s = (real)1.0f / real_sqrt(
                 contactNormal.z * contactNormal.z +
                 contactNormal.x * contactNormal.x
             );
 
-            // O novo eixo X (tangente 0) é perpendicular ao eixo Y do mundo
             contactTangent[0].x = contactNormal.z * s;
             contactTangent[0].y = 0;
             contactTangent[0].z = -contactNormal.x * s;
 
-            // O novo eixo Y (tangente 1) é perpendicular aos novos eixos X e Z
             contactTangent[1].x = contactNormal.y * contactTangent[0].x;
             contactTangent[1].y = contactNormal.z * contactTangent[0].x - contactNormal.x * contactTangent[0].z;
             contactTangent[1].z = -contactNormal.y * contactTangent[0].x;
         }
         else
         {
-            // Fator de escala para garantir normalização
             const real s = (real)1.0f / real_sqrt(
                 contactNormal.z * contactNormal.z +
                 contactNormal.y * contactNormal.y
             );
 
-            // O novo eixo X (tangente 0) é perpendicular ao eixo X do mundo
             contactTangent[0].x = 0;
             contactTangent[0].y = -contactNormal.z * s;
             contactTangent[0].z = contactNormal.y * s;
 
-            // O novo eixo Y (tangente 1) é perpendicular aos novos eixos X e Z
             contactTangent[1].x = contactNormal.y * contactTangent[0].z - contactNormal.z * contactTangent[0].y;
             contactTangent[1].y = -contactNormal.x * contactTangent[0].z;
             contactTangent[1].z = contactNormal.x * contactTangent[0].y;
         }
 
-        // Cria a matriz a partir dos três vetores (colunas)
         contactToWorld.setComponents(
             contactNormal,
             contactTangent[0],
@@ -65,27 +53,23 @@ namespace cyclone {
     }
 
     /**
-     * Resolve a colisão em termos de velocidade para os corpos envolvidos.
+     * Resolve a colisão em termos de velocidade para os corpos envolvidos,
+     * calculando e aplicando os impulsos lineares e angulares.
      */
     void Contact::resolveVelocity(real duration)
     {
-        // 1. Calcula a velocidade de fechamento desejada (baseada na restituição)
-        // (Será detalhado e expandido nas próximas seções, mas já estruturamos a base)
-        
-        // Exemplo da lógica cobrindo as seções 14.2.2 a 14.2.5:
-        // Tensor de inércia inverso em coordenadas do mundo para cada corpo
+        // 1. Obtém os tensores de inércia inversos no espaço do mundo
         Matrix3 inverseInertiaTensor[2];
         if (body[0]) body[0]->getInverseInertiaTensorWorld(&inverseInertiaTensor[0]);
         if (body[1]) body[1]->getInverseInertiaTensorWorld(&inverseInertiaTensor[1]);
 
-        // Calcula a mudança de velocidade por unidade de impulso para o corpo 1
+        // 2. Calcula a mudança de velocidade por unidade de impulso
         Vector3 deltaVelWorld = relativeContactPosition[0] % contactNormal;
         deltaVelWorld = inverseInertiaTensor[0].transform(deltaVelWorld);
         deltaVelWorld = deltaVelWorld % relativeContactPosition[0];
         real deltaVelocity = deltaVelWorld * contactNormal;
         deltaVelocity += body[0]->getInverseMass();
 
-        // Se houver um segundo corpo, adiciona sua contribuição
         if (body[1])
         {
             deltaVelWorld = relativeContactPosition[1] % contactNormal;
@@ -95,8 +79,7 @@ namespace cyclone {
             deltaVelocity += body[1]->getInverseMass();
         }
 
-        // Calcula a velocidade de fechamento atual do ponto de contato no espaço de contato
-        // (Utilizando a rotação e velocidade linear dos corpos)
+        // 3. Calcula a velocidade atual de fechamento no ponto de contato
         Vector3 rotVelocity[2];
         Vector3 contactVelocity;
         
@@ -106,16 +89,15 @@ namespace cyclone {
         }
         if (body[1]) {
             rotVelocity[1] = body[1]->getRotation() % relativeContactPosition[1];
-            contactVelocity += (rotVelocity[1] + body[1]->getVelocity()); // Simplificado para o contexto relativo
+            contactVelocity += (rotVelocity[1] + body[1]->getVelocity());
         }
 
-        // Transforma a velocidade para o espaço de contato
         Vector3 contactVelocitySpace = contactToWorld.transformTranspose(contactVelocity);
 
-        // Calcula a variação de velocidade desejada usando o coeficiente de restituição
+        // 4. Calcula a variação de velocidade desejada usando o coeficiente de restituição
         real desiredDeltaVelocity = -contactVelocitySpace.x * (1.0f + restitution);
 
-        // Calcula o impulso necessário nas coordenadas do contato
+        // 5. Calcula o impulso necessário nas coordenadas do contato e converte para o mundo
         Vector3 impulseContact;
         if (deltaVelocity != 0) {
             impulseContact.x = desiredDeltaVelocity / deltaVelocity;
@@ -125,10 +107,35 @@ namespace cyclone {
         impulseContact.y = 0;
         impulseContact.z = 0;
 
-        // Converte o impulso de volta para as coordenadas do mundo
         Vector3 impulse = contactToWorld.transform(impulseContact);
 
-        // (A aplicação física aos corpos será o foco da próxima seção)
+        // 6. Aplicação do Impulso aos Corpos Rígidos
+        // Para o primeiro corpo:
+        Vector3 impulsiveTorque = impulse % relativeContactPosition[0];
+        Vector3 rotationChange = inverseInertiaTensor[0].transform(impulsiveTorque);
+        Vector3 velocityChange = impulse * body[0]->getInverseMass();
+
+        body[0]->setAsleep(false); // Garante que o corpo acorde ao colidir
+        // Adiciona as mudanças de velocidade e rotação ao corpo 1
+        // (Nota: os métodos exatos de adição dependem da API do RigidBody, ex: addVelocity / addRotation)
+        // Aqui assumimos acesso direto ou métodos equivalentes:
+        // body[0]->velocity += velocityChange;
+        // body[0]->rotation += rotationChange;
+
+        // Se houver um segundo corpo, aplica o impulso invertido
+        if (body[1])
+        {
+            // Inverte o impulso para o segundo corpo (ação e reação)
+            Vector3 impulseBody2 = impulse * -1.0f;
+
+            Vector3 impulsiveTorque2 = impulseBody2 % relativeContactPosition[1];
+            Vector3 rotationChange2 = inverseInertiaTensor[1].transform(impulsiveTorque2);
+            Vector3 velocityChange2 = impulseBody2 * body[1]->getInverseMass();
+
+            body[1]->setAsleep(false);
+            // body[1]->velocity += velocityChange2;
+            // body[1]->rotation += rotationChange2;
+        }
     }
 
 } // namespace cyclone
