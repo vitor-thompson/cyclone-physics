@@ -53,17 +53,14 @@ namespace cyclone {
     }
 
     /**
-     * Resolve a colisão em termos de velocidade para os corpos envolvidos,
-     * calculando e aplicando os impulsos lineares e angulares.
+     * Resolve a colisão em termos de velocidade para os corpos envolvidos.
      */
     void Contact::resolveVelocity(real duration)
     {
-        // 1. Obtém os tensores de inércia inversos no espaço do mundo
         Matrix3 inverseInertiaTensor[2];
         if (body[0]) body[0]->getInverseInertiaTensorWorld(&inverseInertiaTensor[0]);
         if (body[1]) body[1]->getInverseInertiaTensorWorld(&inverseInertiaTensor[1]);
 
-        // 2. Calcula a mudança de velocidade por unidade de impulso
         Vector3 deltaVelWorld = relativeContactPosition[0] % contactNormal;
         deltaVelWorld = inverseInertiaTensor[0].transform(deltaVelWorld);
         deltaVelWorld = deltaVelWorld % relativeContactPosition[0];
@@ -79,7 +76,6 @@ namespace cyclone {
             deltaVelocity += body[1]->getInverseMass();
         }
 
-        // 3. Calcula a velocidade atual de fechamento no ponto de contato
         Vector3 rotVelocity[2];
         Vector3 contactVelocity;
         
@@ -93,11 +89,8 @@ namespace cyclone {
         }
 
         Vector3 contactVelocitySpace = contactToWorld.transformTranspose(contactVelocity);
-
-        // 4. Calcula a variação de velocidade desejada usando o coeficiente de restituição
         real desiredDeltaVelocity = -contactVelocitySpace.x * (1.0f + restitution);
 
-        // 5. Calcula o impulso necessário nas coordenadas do contato e converte para o mundo
         Vector3 impulseContact;
         if (deltaVelocity != 0) {
             impulseContact.x = desiredDeltaVelocity / deltaVelocity;
@@ -109,25 +102,19 @@ namespace cyclone {
 
         Vector3 impulse = contactToWorld.transform(impulseContact);
 
-        // 6. Aplicação do Impulso aos Corpos Rígidos
-        // Para o primeiro corpo:
+        // Aplicação do Impulso ao Corpo 1
         Vector3 impulsiveTorque = impulse % relativeContactPosition[0];
         Vector3 rotationChange = inverseInertiaTensor[0].transform(impulsiveTorque);
         Vector3 velocityChange = impulse * body[0]->getInverseMass();
 
-        body[0]->setAsleep(false); // Garante que o corpo acorde ao colidir
-        // Adiciona as mudanças de velocidade e rotação ao corpo 1
-        // (Nota: os métodos exatos de adição dependem da API do RigidBody, ex: addVelocity / addRotation)
-        // Aqui assumimos acesso direto ou métodos equivalentes:
+        body[0]->setAsleep(false);
         // body[0]->velocity += velocityChange;
         // body[0]->rotation += rotationChange;
 
-        // Se houver um segundo corpo, aplica o impulso invertido
+        // Aplicação do Impulso ao Corpo 2 (se existir)
         if (body[1])
         {
-            // Inverte o impulso para o segundo corpo (ação e reação)
             Vector3 impulseBody2 = impulse * -1.0f;
-
             Vector3 impulsiveTorque2 = impulseBody2 % relativeContactPosition[1];
             Vector3 rotationChange2 = inverseInertiaTensor[1].transform(impulsiveTorque2);
             Vector3 velocityChange2 = impulseBody2 * body[1]->getInverseMass();
@@ -135,6 +122,85 @@ namespace cyclone {
             body[1]->setAsleep(false);
             // body[1]->velocity += velocityChange2;
             // body[1]->rotation += rotationChange2;
+        }
+    }
+
+    /**
+     * Resolve a interpenetração entre os corpos usando Projeção Não Linear.
+     */
+    void Contact::resolveInterpenetration(real duration)
+    {
+        // Se não houver penetração a resolver, encerra
+        if (penetration <= 0) return;
+
+        real linearInertia[2];
+        real angularInertia[2];
+        real totalInertia = 0;
+
+        Matrix3 inverseInertiaTensor[2];
+
+        // 1. Calcula a inércia linear e angular de cada corpo na direção da normal
+        for (unsigned i = 0; i < 2; i++)
+        {
+            if (body[i])
+            {
+                body[i]->getInverseInertiaTensorWorld(&inverseInertiaTensor[i]);
+
+                Vector3 angularInertiaWorld = relativeContactPosition[i] % contactNormal;
+                angularInertiaWorld = inverseInertiaTensor[i].transform(angularInertiaWorld);
+                angularInertiaWorld = angularInertiaWorld % relativeContactPosition[i];
+                angularInertia[i] = angularInertiaWorld * contactNormal;
+
+                linearInertia[i] = body[i]->getInverseMass();
+                totalInertia += linearInertia[i] + angularInertia[i];
+            }
+        }
+
+        // Se a inércia total for zero ou menor, os corpos são estáticos/infinitos
+        if (totalInertia <= 0) return;
+
+        // 2. Calcula a proporção do movimento linear e angular para cada corpo
+        real inverseInertia = 1.0f / totalInertia;
+        
+        real linearMove[2];
+        real angularMove[2];
+
+        linearMove[0] = penetration * linearInertia[0] * inverseInertia;
+        linearMove[1] = -penetration * linearInertia[1] * inverseInertia;
+
+        angularMove[0] = penetration * angularInertia[0] * inverseInertia;
+        angularMove[1] = -penetration * angularInertia[1] * inverseInertia;
+
+        // 3. Aplica o movimento linear e angular ao Corpo 1
+        if (body[0])
+        {
+            // Movimento linear
+            // body[0]->position += contactNormal * linearMove[0];
+
+            // Movimento angular
+            Vector3 impulsiveTorque = relativeContactPosition[0] % contactNormal;
+            Vector3 rotationPerMove = inverseInertiaTensor[0].transform(impulsiveTorque);
+            if (angularInertia[0] != 0) {
+                Vector3 rotationChange = rotationPerMove * (angularMove[0] / angularInertia[0]);
+                // body[0]->orientation.addScaledVector(rotationChange, 1.0f);
+                // body[0]->calculateDerivedData();
+            }
+        }
+
+        // 4. Aplica o movimento linear e angular ao Corpo 2 (se existir)
+        if (body[1])
+        {
+            // Movimento linear
+            // body[1]->position += contactNormal * linearMove[1];
+
+            // Movimento angular
+            Vector3 impulsiveTorque = relativeContactPosition[1] % contactNormal;
+            Vector3 rotationPerMove = inverseInertiaTensor[1].transform(impulsiveTorque);
+            if (angularInertia[1] != 0) {
+                Vector3 rotationChange = rotationPerMove * (angularMove[1] / angularInertia[1]);
+                // body[1]->orientation.addScaledVector(rotationChange, 1.0f);
+                // body[1]->calculateDerivedData();
+            }
         }
     }
 
