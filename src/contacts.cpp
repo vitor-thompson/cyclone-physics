@@ -4,8 +4,48 @@
  */
 
 #include "cyclone/contacts.h"
+#include <assert.h>
 
 namespace cyclone {
+
+    /**
+     * Prepara todos os dados internos necessários para o contato.
+     */
+    void Contact::calculateInternals(real duration)
+    {
+        // Garante que o primeiro objeto não seja nulo (swap se necessário)
+        if (!body[0]) swapBodies();
+        assert(body[0]);
+
+        // Calcula a base ortonormal do contato
+        calculateContactBasis();
+
+        // Armazena a posição relativa do ponto de contato para cada corpo
+        relativeContactPosition[0] = contactPoint - body[0]->getPosition();
+        if (body[1]) {
+            relativeContactPosition[1] = contactPoint - body[1]->getPosition();
+        }
+
+        // Encontra a velocidade relativa dos corpos no ponto de contato
+        contactVelocity = calculateLocalVelocity(0, duration);
+        if (body[1]) {
+            contactVelocity -= calculateLocalVelocity(1, duration);
+        }
+
+        // Calcula a variação de velocidade desejada baseada na restituição
+        desiredDeltaVelocity = -contactVelocity.x * (1.0f + restitution);
+    }
+
+    /**
+     * Troca os corpos do contato e inverte o sentido da normal.
+     */
+    void Contact::swapBodies()
+    {
+        contactNormal *= -1.0f;
+        RigidBody* temp = body[0];
+        body[0] = body[1];
+        body[1] = temp;
+    }
 
     /**
      * Constrói uma base ortonormal arbitrária para o contato.
@@ -53,6 +93,22 @@ namespace cyclone {
     }
 
     /**
+     * Calcula a velocidade local de um corpo no ponto de contato (em coordenadas de contato).
+     */
+    Vector3 Contact::calculateLocalVelocity(unsigned bodyIndex, real duration)
+    {
+        RigidBody* thisBody = body[bodyIndex];
+
+        // Velocidade linear gerada pela rotação no ponto de contato
+        Vector3 velocity = thisBody->getRotation() % relativeContactPosition[bodyIndex];
+        velocity += thisBody->getVelocity();
+
+        // Transforma a velocidade para o espaço de contato
+        Vector3 localVelocity = contactToWorld.transformTranspose(velocity);
+        return localVelocity;
+    }
+
+    /**
      * Resolve a colisão em termos de velocidade para os corpos envolvidos.
      */
     void Contact::resolveVelocity(real duration)
@@ -75,21 +131,6 @@ namespace cyclone {
             deltaVelocity += deltaVelWorld * contactNormal;
             deltaVelocity += body[1]->getInverseMass();
         }
-
-        Vector3 rotVelocity[2];
-        Vector3 contactVelocity;
-        
-        if (body[0]) {
-            rotVelocity[0] = body[0]->getRotation() % relativeContactPosition[0];
-            contactVelocity = rotVelocity[0] + body[0]->getVelocity();
-        }
-        if (body[1]) {
-            rotVelocity[1] = body[1]->getRotation() % relativeContactPosition[1];
-            contactVelocity += (rotVelocity[1] + body[1]->getVelocity());
-        }
-
-        Vector3 contactVelocitySpace = contactToWorld.transformTranspose(contactVelocity);
-        real desiredDeltaVelocity = -contactVelocitySpace.x * (1.0f + restitution);
 
         Vector3 impulseContact;
         if (deltaVelocity != 0) {
@@ -167,7 +208,6 @@ namespace cyclone {
         angularMove[0] = penetration * angularInertia[0] * inverseInertia;
         angularMove[1] = -penetration * angularInertia[1] * inverseInertia;
 
-        // Limite de rotação excessiva para evitar instabilidades
         const real angularLimit = 0.2f;
 
         for (unsigned i = 0; i < 2; i++)
@@ -219,11 +259,26 @@ namespace cyclone {
     }
 
     /**
+     * Prepara todos os contatos do array.
+     */
+    void ContactResolver::prepareContacts(Contact* contacts, unsigned numContacts, real duration)
+    {
+        Contact* lastContact = contacts + numContacts;
+        for (Contact* contact = contacts; contact < lastContact; contact++)
+        {
+            contact->calculateInternals(duration);
+        }
+    }
+
+    /**
      * Executa o pipeline completo de resolução para um conjunto de contatos.
      */
     void ContactResolver::resolveContacts(Contact* contacts, unsigned numContacts, real duration)
     {
         if (numContacts == 0) return;
+
+        // Prepara os dados internos de todos os contatos
+        prepareContacts(contacts, numContacts, duration);
 
         // 1. Resolução de Interpenetração (Posições)
         for (unsigned i = 0; i < numContacts; i++) {
