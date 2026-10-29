@@ -11,7 +11,6 @@
 
 namespace cyclone {
 
-    // Declaração antecipada para o relacionamento de amizade
     class ContactResolver;
 
     /**
@@ -20,10 +19,9 @@ namespace cyclone {
     class Contact
     {
     public:
-        // Permite que o ContactResolver acesse os membros internos do contato
         friend class ContactResolver;
 
-        // Corpos rígidos envolvidos no contato (body[1] pode ser nulo se for colisão com o cenário fixo)
+        // Corpos rígidos envolvidos no contato (body[1] é nulo se for colisão com o cenário fixo)
         RigidBody* body[2];
 
         // Coeficiente de restituição (elasticidade) da colisão
@@ -38,16 +36,24 @@ namespace cyclone {
         // Profundidade da interpenetração
         real penetration;
 
-        // Matriz de transformação que converte o espaço de contato para o espaço do mundo
+    protected:
+        // Matriz que converte o espaço de contato para o espaço do mundo
         Matrix3 contactToWorld;
+
+        // Velocidade de fechamento no ponto de contato
+        Vector3 contactVelocity;
+
+        // Variação de velocidade desejada para a resolução
+        real desiredDeltaVelocity;
 
         // Posição do ponto de contato relativa ao centro de cada corpo
         Vector3 relativeContactPosition[2];
 
+    public:
         /**
-         * Constrói uma base ortonormal arbitrária para o contato (espaço de contato).
+         * Prepara os dados internos do contato (basis, posições relativas e velocidades).
          */
-        void calculateContactBasis();
+        void calculateInternals(real duration);
 
         /**
          * Resolve a colisão em termos de velocidade para os corpos envolvidos.
@@ -58,6 +64,22 @@ namespace cyclone {
          * Resolve a interpenetração entre os corpos usando Projeção Não Linear.
          */
         void resolveInterpenetration(real duration);
+
+    protected:
+        /**
+         * Constrói uma base ortonormal arbitrária para o contato.
+         */
+        void calculateContactBasis();
+
+        /**
+         * Troca os corpos envolvidos no contato e inverte a normal.
+         */
+        void swapBodies();
+
+        /**
+         * Calcula a velocidade local de um corpo específico no ponto de contato.
+         */
+        Vector3 calculateLocalVelocity(unsigned bodyIndex, real duration);
     };
 
     /**
@@ -70,6 +92,12 @@ namespace cyclone {
          * Resolve um conjunto de contatos para penetração e velocidade.
          */
         void resolveContacts(Contact* contactArray, unsigned numContacts, real duration);
+
+    protected:
+        /**
+         * Prepara os contatos antes da resolução.
+         */
+        void prepareContacts(Contact* contactArray, unsigned numContacts, real duration);
     };
 
 } // namespace cyclone
