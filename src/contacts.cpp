@@ -64,4 +64,71 @@ namespace cyclone {
         );
     }
 
+    /**
+     * Resolve a colisão em termos de velocidade para os corpos envolvidos.
+     */
+    void Contact::resolveVelocity(real duration)
+    {
+        // 1. Calcula a velocidade de fechamento desejada (baseada na restituição)
+        // (Será detalhado e expandido nas próximas seções, mas já estruturamos a base)
+        
+        // Exemplo da lógica cobrindo as seções 14.2.2 a 14.2.5:
+        // Tensor de inércia inverso em coordenadas do mundo para cada corpo
+        Matrix3 inverseInertiaTensor[2];
+        if (body[0]) body[0]->getInverseInertiaTensorWorld(&inverseInertiaTensor[0]);
+        if (body[1]) body[1]->getInverseInertiaTensorWorld(&inverseInertiaTensor[1]);
+
+        // Calcula a mudança de velocidade por unidade de impulso para o corpo 1
+        Vector3 deltaVelWorld = relativeContactPosition[0] % contactNormal;
+        deltaVelWorld = inverseInertiaTensor[0].transform(deltaVelWorld);
+        deltaVelWorld = deltaVelWorld % relativeContactPosition[0];
+        real deltaVelocity = deltaVelWorld * contactNormal;
+        deltaVelocity += body[0]->getInverseMass();
+
+        // Se houver um segundo corpo, adiciona sua contribuição
+        if (body[1])
+        {
+            deltaVelWorld = relativeContactPosition[1] % contactNormal;
+            deltaVelWorld = inverseInertiaTensor[1].transform(deltaVelWorld);
+            deltaVelWorld = deltaVelWorld % relativeContactPosition[1];
+            deltaVelocity += deltaVelWorld * contactNormal;
+            deltaVelocity += body[1]->getInverseMass();
+        }
+
+        // Calcula a velocidade de fechamento atual do ponto de contato no espaço de contato
+        // (Utilizando a rotação e velocidade linear dos corpos)
+        Vector3 rotVelocity[2];
+        Vector3 contactVelocity;
+        
+        if (body[0]) {
+            rotVelocity[0] = body[0]->getRotation() % relativeContactPosition[0];
+            contactVelocity = rotVelocity[0] + body[0]->getVelocity();
+        }
+        if (body[1]) {
+            rotVelocity[1] = body[1]->getRotation() % relativeContactPosition[1];
+            contactVelocity += (rotVelocity[1] + body[1]->getVelocity()); // Simplificado para o contexto relativo
+        }
+
+        // Transforma a velocidade para o espaço de contato
+        Vector3 contactVelocitySpace = contactToWorld.transformTranspose(contactVelocity);
+
+        // Calcula a variação de velocidade desejada usando o coeficiente de restituição
+        real desiredDeltaVelocity = -contactVelocitySpace.x * (1.0f + restitution);
+
+        // Calcula o impulso necessário nas coordenadas do contato
+        Vector3 impulseContact;
+        if (deltaVelocity != 0) {
+            impulseContact.x = desiredDeltaVelocity / deltaVelocity;
+        } else {
+            impulseContact.x = 0;
+        }
+        impulseContact.y = 0;
+        impulseContact.z = 0;
+
+        // Converte o impulso de volta para as coordenadas do mundo
+        Vector3 impulse = contactToWorld.transform(impulseContact);
+
+        // (A aplicação física aos corpos será o foco da próxima seção)
+    }
+
 } // namespace cyclone
