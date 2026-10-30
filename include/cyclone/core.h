@@ -13,7 +13,8 @@ namespace cyclone {
     // Definição do tipo real (pode ser float ou double)
     typedef float real;
 
-    // ... (demais definições de Vector3, Matrix4, etc. mantêm-se iguais) ...
+    // Definição básica antecipada ou suposta do Vector3 (conforme padrão do engine)
+    // Certifique-se de que sua classe Vector3 contenha x, y, z e as operações básicas.
 
     /**
      * Armazena um tensor de inércia ou matriz de rotação 3x3 em ordem row-major.
@@ -54,7 +55,20 @@ namespace cyclone {
             data[8] = compThree.z;
         }
 
-        // ... (outros métodos da Matrix3) ...
+        /**
+         * Define a matriz como uma matriz antissimétrica baseada no vetor fornecido.
+         * Equivalente ao produto vetorial: a x b = A_s * b.
+         */
+        void setSkewSymmetric(const Vector3 vector)
+        {
+            data[0] = data[4] = data[8] = 0;
+            data[1] = -vector.z;
+            data[2] = vector.y;
+            data[3] = vector.z;
+            data[5] = -vector.x;
+            data[6] = -vector.y;
+            data[7] = vector.x;
+        }
     };
 
 } // namespace cyclone
