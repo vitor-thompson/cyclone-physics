@@ -1,7 +1,7 @@
 /*
  * Implementação do sistema de contatos e resolução do motor Cyclone.
  * Parte do livro Game Physics Engine Development por Ian Millington.
- * Atualizado com suporte a fricção e matrizes 3D de impulso (Capítulo 15).
+ * Atualizado com suporte completo a fricção isotrópica e matrizes 3D (Capítulo 15).
  */
 
 #include "cyclone/contacts.h"
@@ -78,7 +78,7 @@ namespace cyclone {
 
             contactTangent[1].x = contactNormal.y * contactTangent[0].z - contactNormal.z * contactTangent[0].y;
             contactTangent[1].y = -contactNormal.x * contactTangent[0].z;
-            contactTangent[1].z = -contactNormal.x * contactTangent[0].y; // Corrigido sinal conforme padrão
+            contactTangent[1].z = -contactNormal.x * contactTangent[0].y;
         }
 
         contactToWorld.setComponents(
@@ -121,70 +121,81 @@ namespace cyclone {
 
     void Contact::resolveVelocity(real duration)
     {
-        // 1. Constrói a matriz de mudança de velocidade 3x3 (Linear + Angular em coordenadas de contato)
         Matrix3 inverseInertiaTensor[2];
         if (body[0]) body[0]->getInverseInertiaTensorWorld(&inverseInertiaTensor[0]);
-        if (body[1]) body[1]->getInverseInertiaTensorWorld(&inverseInertiaTensor[1]);
 
+        real inverseMass = body[0]->getInverseMass();
+
+        // 1. O equivalente ao produto vetorial em matrizes é a multiplicação por matriz antissimétrica
         Matrix3 impulseToTorque;
         impulseToTorque.setSkewSymmetric(relativeContactPosition[0]);
 
+        // Constrói a matriz para converter impulso de contato em mudança de velocidade no mundo (Corpo 1)
         Matrix3 deltaVelWorld = impulseToTorque;
         deltaVelWorld *= inverseInertiaTensor[0];
         deltaVelWorld *= impulseToTorque;
         deltaVelWorld *= -1;
 
+        // 2. Se houver um segundo corpo, adiciona os dados dele
         if (body[1])
         {
+            body[1]->getInverseInertiaTensorWorld(&inverseInertiaTensor[1]);
             impulseToTorque.setSkewSymmetric(relativeContactPosition[1]);
+
             Matrix3 deltaVelWorld2 = impulseToTorque;
             deltaVelWorld2 *= inverseInertiaTensor[1];
             deltaVelWorld2 *= impulseToTorque;
             deltaVelWorld2 *= -1;
 
             deltaVelWorld += deltaVelWorld2;
+            inverseMass += body[1]->getInverseMass();
         }
 
-        // Converte para coordenadas de contato: B * M * B^T (ou transpose para matrizes ortogonais)
+        // 3. Mudança de base para converter em coordenadas de contato
         Matrix3 deltaVelocity = contactToWorld.transpose();
         deltaVelocity *= deltaVelWorld;
         deltaVelocity *= contactToWorld;
 
-        // Adiciona a inércia linear (inverso da massa) à diagonal principal
-        deltaVelocity.data[0] += body[0]->getInverseMass();
-        if (body[1])
-        {
-            deltaVelocity.data[0] += body[1]->getInverseMass();
-            deltaVelocity.data[4] += body[1]->getInverseMass();
-            deltaVelocity.data[8] += body[1]->getInverseMass();
-        }
-        deltaVelocity.data[4] += body[0]->getInverseMass();
-        deltaVelocity.data[8] += body[0]->getInverseMass();
+        // Adiciona a mudança de velocidade linear (inverso da massa)
+        deltaVelocity.data[0] += inverseMass;
+        deltaVelocity.data[4] += inverseMass;
+        deltaVelocity.data[8] += inverseMass;
 
-        // 2. Encontra o impulso necessário para alcançar a mudança de velocidade desejada (incluindo atrito)
-        // Inverte a matriz de delta de velocidade para transformar delta de velocidade em impulso
+        // 4. Inverte para obter o impulso necessário por unidade de velocidade
         Matrix3 impulseMatrix = deltaVelocity.inverse();
 
-        Vector3 velocityChange(desiredDeltaVelocity, -contactVelocity.y, -contactVelocity.z);
-        Vector3 impulseContact = impulseMatrix.transform(velocityChange);
+        // Encontra as velocidades alvo a zerar (normal + 2 componentes tangenciais de atrito)
+        Vector3 velKill(
+            desiredDeltaVelocity,
+            -contactVelocity.y,
+            -contactVelocity.z
+        );
 
-        // 3. Aplicação do limite de fricção (Estática vs Dinâmica)
-        real planarImpulse = real_sqrt(impulseContact.y * impulseContact.y + impulseContact.z * impulseContact.z);
+        // Encontra o vetor de impulso necessário para atingir as velocidades alvo
+        Vector3 impulseContact = impulseMatrix.transform(velKill);
+
+        // 5. Verificação do limite de atrito estático
+        real planarImpulse = real_sqrt(
+            impulseContact.y * impulseContact.y +
+            impulseContact.z * impulseContact.z
+        );
+
         if (planarImpulse > impulseContact.x * friction)
         {
-            // O atrito foi superado -> Fricção Dinâmica
+            // O atrito estático foi superado -> Uso de Fricção Dinâmica (Seção 15.4.3)
             impulseContact.y /= planarImpulse;
             impulseContact.z /= planarImpulse;
 
-            impulseContact.x = desiredDeltaVelocity; // Recalcula apenas com normal se necessário ou ajusta
-            // Aplicação correta do limite dinâmico:
-            real normalImpulse = impulseMatrix.data[0] * desiredDeltaVelocity; // Simplificação padrão
-            // Ou redimensionando proporcionalmente ao atrito:
+            impulseContact.x = deltaVelocity.data[0] +
+                deltaVelocity.data[1] * friction * impulseContact.y +
+                deltaVelocity.data[2] * friction * impulseContact.z;
+
+            impulseContact.x = desiredDeltaVelocity / impulseContact.x;
             impulseContact.y *= friction * impulseContact.x;
             impulseContact.z *= friction * impulseContact.x;
         }
 
-        // 4. Converte o impulso de coordenadas de contato para coordenadas do mundo
+        // 6. Converte o impulso de coordenadas de contato para coordenadas do mundo
         Vector3 impulse = contactToWorld.transform(impulseContact);
 
         // Aplicação ao Corpo 1
@@ -215,7 +226,6 @@ namespace cyclone {
                                      real angularAmount[2],
                                      real penetration)
     {
-        // ... (mantido igual à versão anterior robusta)
         if (penetration <= 0) return;
 
         real linearInertia[2];
@@ -275,6 +285,7 @@ namespace cyclone {
             }
         }
 
+        // Corpo 1
         if (body[0])
         {
             Vector3 impulsiveTorque = relativeContactPosition[0] % contactNormal;
@@ -296,6 +307,7 @@ namespace cyclone {
             angularAmount[0] = 0;
         }
 
+        // Corpo 2
         if (body[1])
         {
             Vector3 impulsiveTorque = relativeContactPosition[1] % contactNormal;
@@ -332,130 +344,4 @@ namespace cyclone {
     ContactResolver::ContactResolver(unsigned velocityIterations, unsigned positionIterations,
                                      real velocityEpsilon, real positionEpsilon)
         : velocityIterations(velocityIterations),
-          positionIterations(positionIterations),
-          velocityEpsilon(velocityEpsilon),
-          positionEpsilon(positionEpsilon)
-    {
-    }
-
-    void ContactResolver::setIterations(unsigned velocityIterations, unsigned positionIterations)
-    {
-        this->velocityIterations = velocityIterations;
-        this->positionIterations = positionIterations;
-    }
-
-    void ContactResolver::setEpsilon(real velocityEpsilon, real positionEpsilon)
-    {
-        this->velocityEpsilon = velocityEpsilon;
-        this->positionEpsilon = positionEpsilon;
-    }
-
-    void ContactResolver::prepareContacts(Contact* contacts, unsigned numContacts, real duration)
-    {
-        Contact* lastContact = contacts + numContacts;
-        for (Contact* contact = contacts; contact < lastContact; contact++)
-        {
-            contact->calculateInternals(duration);
-        }
-    }
-
-    void ContactResolver::adjustPositions(Contact* c, unsigned numContacts, real duration)
-    {
-        unsigned i, index;
-        Vector3 linearChange[2], angularChange[2];
-        real angularAmount[2];
-        real max;
-        Vector3 cp;
-
-        positionIterationsUsed = 0;
-        while (positionIterationsUsed < positionIterations)
-        {
-            max = positionEpsilon;
-            index = numContacts;
-            for (i = 0; i < numContacts; i++) {
-                if (c[i].penetration > max) {
-                    max = c[i].penetration;
-                    index = i;
-                }
-            }
-
-            if (index == numContacts) break;
-
-            c[index].applyPositionChange(linearChange, angularChange, angularAmount, max);
-
-            for (i = 0; i < numContacts; i++)
-            {
-                if (c[i].body[0])
-                {
-                    if (c[i].body[0] == c[index].body[0])
-                    {
-                        cp = angularChange[0].vectorProduct(c[i].relativeContactPosition[0]);
-                        cp += linearChange[0];
-                        c[i].penetration -= angularAmount[0] * cp.scalarProduct(c[i].contactNormal);
-                    }
-                    else if (c[i].body[0] == c[index].body[1])
-                    {
-                        cp = angularChange[1].vectorProduct(c[i].relativeContactPosition[0]);
-                        cp += linearChange[1];
-                        c[i].penetration -= angularAmount[1] * cp.scalarProduct(c[i].contactNormal);
-                    }
-                }
-
-                if (c[i].body[1])
-                {
-                    if (c[i].body[1] == c[index].body[0])
-                    {
-                        cp = angularChange[0].vectorProduct(c[i].relativeContactPosition[1]);
-                        cp += linearChange[0];
-                        c[i].penetration += angularAmount[0] * cp.scalarProduct(c[i].contactNormal);
-                    }
-                    else if (c[i].body[1] == c[index].body[1])
-                    {
-                        cp = angularChange[1].vectorProduct(c[i].relativeContactPosition[1]);
-                        cp += linearChange[1];
-                        c[i].penetration += angularAmount[1] * cp.scalarProduct(c[i].contactNormal);
-                    }
-                }
-            }
-
-            positionIterationsUsed++;
-        }
-    }
-
-    void ContactResolver::adjustVelocities(Contact* c, unsigned numContacts, real duration)
-    {
-        unsigned i, index;
-        real max;
-
-        velocityIterationsUsed = 0;
-        while (velocityIterationsUsed < velocityIterations)
-        {
-            max = velocityEpsilon;
-            index = numContacts;
-            for (i = 0; i < numContacts; i++)
-            {
-                if (c[i].contactVelocity.x < max)
-                {
-                    max = c[i].contactVelocity.x;
-                    index = i;
-                }
-            }
-
-            if (index == numContacts) break;
-
-            c[index].resolveVelocity(duration);
-
-            velocityIterationsUsed++;
-        }
-    }
-
-    void ContactResolver::resolveContacts(Contact* contacts, unsigned numContacts, real duration)
-    {
-        if (numContacts == 0) return;
-
-        prepareContacts(contacts, numContacts, duration);
-        adjustPositions(contacts, numContacts, duration);
-        adjustVelocities(contacts, numContacts, duration);
-    }
-
-} // namespace cyclone
+          positionIterations
