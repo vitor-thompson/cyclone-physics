@@ -1,6 +1,7 @@
 /*
  * Implementação do sistema de contatos e resolução do motor Cyclone.
  * Parte do livro Game Physics Engine Development por Ian Millington.
+ * Atualizado com suporte a fricção e matrizes 3D de impulso (Capítulo 15).
  */
 
 #include "cyclone/contacts.h"
@@ -33,7 +34,7 @@ namespace cyclone {
             contactVelocity -= calculateLocalVelocity(1, duration);
         }
 
-        // Calcula a variação de velocidade desejada (com compensação de gravidade e limite de repouso - Cap. 15)
+        // Calcula a variação de velocidade desejada (com compensação de gravidade e limite de repouso)
         calculateDesiredDeltaVelocity(duration);
     }
 
@@ -77,7 +78,7 @@ namespace cyclone {
 
             contactTangent[1].x = contactNormal.y * contactTangent[0].z - contactNormal.z * contactTangent[0].y;
             contactTangent[1].y = -contactNormal.x * contactTangent[0].z;
-            contactTangent[1].z = contactNormal.x * contactTangent[0].y;
+            contactTangent[1].z = -contactNormal.x * contactTangent[0].y; // Corrigido sinal conforme padrão
         }
 
         contactToWorld.setComponents(
@@ -120,51 +121,92 @@ namespace cyclone {
 
     void Contact::resolveVelocity(real duration)
     {
+        // 1. Constrói a matriz de mudança de velocidade 3x3 (Linear + Angular em coordenadas de contato)
         Matrix3 inverseInertiaTensor[2];
         if (body[0]) body[0]->getInverseInertiaTensorWorld(&inverseInertiaTensor[0]);
         if (body[1]) body[1]->getInverseInertiaTensorWorld(&inverseInertiaTensor[1]);
 
-        Vector3 deltaVelWorld = relativeContactPosition[0] % contactNormal;
-        deltaVelWorld = inverseInertiaTensor[0].transform(deltaVelWorld);
-        deltaVelWorld = deltaVelWorld % relativeContactPosition[0];
-        real deltaVelocity = deltaVelWorld * contactNormal;
-        deltaVelocity += body[0]->getInverseMass();
+        Matrix3 impulseToTorque;
+        impulseToTorque.setSkewSymmetric(relativeContactPosition[0]);
+
+        Matrix3 deltaVelWorld = impulseToTorque;
+        deltaVelWorld *= inverseInertiaTensor[0];
+        deltaVelWorld *= impulseToTorque;
+        deltaVelWorld *= -1;
 
         if (body[1])
         {
-            deltaVelWorld = relativeContactPosition[1] % contactNormal;
-            deltaVelWorld = inverseInertiaTensor[1].transform(deltaVelWorld);
-            deltaVelWorld = deltaVelWorld % relativeContactPosition[1];
-            deltaVelocity += deltaVelWorld * contactNormal;
-            deltaVelocity += body[1]->getInverseMass();
+            impulseToTorque.setSkewSymmetric(relativeContactPosition[1]);
+            Matrix3 deltaVelWorld2 = impulseToTorque;
+            deltaVelWorld2 *= inverseInertiaTensor[1];
+            deltaVelWorld2 *= impulseToTorque;
+            deltaVelWorld2 *= -1;
+
+            deltaVelWorld += deltaVelWorld2;
         }
 
-        if (deltaVelocity <= 0) return;
+        // Converte para coordenadas de contato: B * M * B^T (ou transpose para matrizes ortogonais)
+        Matrix3 deltaVelocity = contactToWorld.transpose();
+        deltaVelocity *= deltaVelWorld;
+        deltaVelocity *= contactToWorld;
 
-        real impulseContactX = desiredDeltaVelocity / deltaVelocity;
-        Vector3 impulseContact(impulseContactX, 0, 0);
+        // Adiciona a inércia linear (inverso da massa) à diagonal principal
+        deltaVelocity.data[0] += body[0]->getInverseMass();
+        if (body[1])
+        {
+            deltaVelocity.data[0] += body[1]->getInverseMass();
+            deltaVelocity.data[4] += body[1]->getInverseMass();
+            deltaVelocity.data[8] += body[1]->getInverseMass();
+        }
+        deltaVelocity.data[4] += body[0]->getInverseMass();
+        deltaVelocity.data[8] += body[0]->getInverseMass();
+
+        // 2. Encontra o impulso necessário para alcançar a mudança de velocidade desejada (incluindo atrito)
+        // Inverte a matriz de delta de velocidade para transformar delta de velocidade em impulso
+        Matrix3 impulseMatrix = deltaVelocity.inverse();
+
+        Vector3 velocityChange(desiredDeltaVelocity, -contactVelocity.y, -contactVelocity.z);
+        Vector3 impulseContact = impulseMatrix.transform(velocityChange);
+
+        // 3. Aplicação do limite de fricção (Estática vs Dinâmica)
+        real planarImpulse = real_sqrt(impulseContact.y * impulseContact.y + impulseContact.z * impulseContact.z);
+        if (planarImpulse > impulseContact.x * friction)
+        {
+            // O atrito foi superado -> Fricção Dinâmica
+            impulseContact.y /= planarImpulse;
+            impulseContact.z /= planarImpulse;
+
+            impulseContact.x = desiredDeltaVelocity; // Recalcula apenas com normal se necessário ou ajusta
+            // Aplicação correta do limite dinâmico:
+            real normalImpulse = impulseMatrix.data[0] * desiredDeltaVelocity; // Simplificação padrão
+            // Ou redimensionando proporcionalmente ao atrito:
+            impulseContact.y *= friction * impulseContact.x;
+            impulseContact.z *= friction * impulseContact.x;
+        }
+
+        // 4. Converte o impulso de coordenadas de contato para coordenadas do mundo
         Vector3 impulse = contactToWorld.transform(impulseContact);
 
         // Aplicação ao Corpo 1
-        Vector3 impulsiveTorque = impulse % relativeContactPosition[0];
+        Vector3 impulsiveTorque = relativeContactPosition[0] % impulse;
         Vector3 rotationChange0 = inverseInertiaTensor[0].transform(impulsiveTorque);
         Vector3 velocityChange0 = impulse * body[0]->getInverseMass();
 
         body[0]->setAsleep(false);
-        // body[0]->velocity += velocityChange0;
-        // body[0]->rotation += rotationChange0;
+        body[0]->velocity += velocityChange0;
+        body[0]->rotation += rotationChange0;
 
         // Aplicação ao Corpo 2 (se existir)
         if (body[1])
         {
             Vector3 impulseBody2 = impulse * -1.0f;
-            Vector3 impulsiveTorque2 = impulseBody2 % relativeContactPosition[1];
+            Vector3 impulsiveTorque2 = relativeContactPosition[1] % impulseBody2;
             Vector3 rotationChange1 = inverseInertiaTensor[1].transform(impulsiveTorque2);
             Vector3 velocityChange1 = impulseBody2 * body[1]->getInverseMass();
 
             body[1]->setAsleep(false);
-            // body[1]->velocity += velocityChange1;
-            // body[1]->rotation += rotationChange1;
+            body[1]->velocity += velocityChange1;
+            body[1]->rotation += rotationChange1;
         }
     }
 
@@ -173,6 +215,7 @@ namespace cyclone {
                                      real angularAmount[2],
                                      real penetration)
     {
+        // ... (mantido igual à versão anterior robusta)
         if (penetration <= 0) return;
 
         real linearInertia[2];
@@ -232,7 +275,6 @@ namespace cyclone {
             }
         }
 
-        // Corpo 1
         if (body[0])
         {
             Vector3 impulsiveTorque = relativeContactPosition[0] % contactNormal;
@@ -254,7 +296,6 @@ namespace cyclone {
             angularAmount[0] = 0;
         }
 
-        // Corpo 2
         if (body[1])
         {
             Vector3 impulsiveTorque = relativeContactPosition[1] % contactNormal;
@@ -384,9 +425,7 @@ namespace cyclone {
     void ContactResolver::adjustVelocities(Contact* c, unsigned numContacts, real duration)
     {
         unsigned i, index;
-        Vector3 velocityChange[2], rotationChange[2];
         real max;
-        Vector3 cp;
 
         velocityIterationsUsed = 0;
         while (velocityIterationsUsed < velocityIterations)
