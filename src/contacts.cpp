@@ -33,8 +33,8 @@ namespace cyclone {
             contactVelocity -= calculateLocalVelocity(1, duration);
         }
 
-        // Calcula a variação de velocidade desejada inicial
-        calculateDesiredDeltaVelocity(duration, (real)0.25f);
+        // Calcula a variação de velocidade desejada (com compensação de gravidade e limite de repouso - Cap. 15)
+        calculateDesiredDeltaVelocity(duration);
     }
 
     void Contact::swapBodies()
@@ -95,8 +95,11 @@ namespace cyclone {
         return contactToWorld.transformTranspose(velocity);
     }
 
-    void Contact::calculateDesiredDeltaVelocity(real duration, real velocityLimit)
+    void Contact::calculateDesiredDeltaVelocity(real duration)
     {
+        const real velocityLimit = (real)0.1f;
+
+        // 1. Calcula a velocidade gerada pela aceleração acumulada no último quadro (ex: gravidade)
         real velocityFromAcc = 0;
         if (body[0]) {
             velocityFromAcc += body[0]->getLastFrameAcceleration() * duration * contactNormal;
@@ -105,11 +108,13 @@ namespace cyclone {
             velocityFromAcc -= body[1]->getLastFrameAcceleration() * duration * contactNormal;
         }
 
+        // 2. Se a velocidade for muito baixa, zera a restituição para evitar vibrações (*jitter*)
         real thisRestitution = restitution;
         if (real_abs(contactVelocity.x) < velocityLimit) {
             thisRestitution = (real)0.0f;
         }
 
+        // 3. Combina o quique com a remoção da velocidade induzida por aceleração
         desiredDeltaVelocity = -contactVelocity.x - thisRestitution * (contactVelocity.x - velocityFromAcc);
     }
 
@@ -242,10 +247,6 @@ namespace cyclone {
             }
 
             linearChange[0] = contactNormal * linearMove[0];
-
-            // body[0]->position += linearChange[0];
-            // body[0]->orientation.addScaledVector(angularChange[0], 1.0f);
-            // body[0]->calculateDerivedData();
         }
         else {
             linearChange[0] = Vector3::ZERO;
@@ -268,10 +269,6 @@ namespace cyclone {
             }
 
             linearChange[1] = contactNormal * linearMove[1];
-
-            // body[1]->position += linearChange[1];
-            // body[1]->orientation.addScaledVector(angularChange[1], 1.0f);
-            // body[1]->calculateDerivedData();
         }
         else {
             linearChange[1] = Vector3::ZERO;
@@ -357,4 +354,69 @@ namespace cyclone {
                     }
                     else if (c[i].body[0] == c[index].body[1])
                     {
-                        cp = angularChange[1].vectorProduct(c[i].relativeContactPosition
+                        cp = angularChange[1].vectorProduct(c[i].relativeContactPosition[0]);
+                        cp += linearChange[1];
+                        c[i].penetration -= angularAmount[1] * cp.scalarProduct(c[i].contactNormal);
+                    }
+                }
+
+                if (c[i].body[1])
+                {
+                    if (c[i].body[1] == c[index].body[0])
+                    {
+                        cp = angularChange[0].vectorProduct(c[i].relativeContactPosition[1]);
+                        cp += linearChange[0];
+                        c[i].penetration += angularAmount[0] * cp.scalarProduct(c[i].contactNormal);
+                    }
+                    else if (c[i].body[1] == c[index].body[1])
+                    {
+                        cp = angularChange[1].vectorProduct(c[i].relativeContactPosition[1]);
+                        cp += linearChange[1];
+                        c[i].penetration += angularAmount[1] * cp.scalarProduct(c[i].contactNormal);
+                    }
+                }
+            }
+
+            positionIterationsUsed++;
+        }
+    }
+
+    void ContactResolver::adjustVelocities(Contact* c, unsigned numContacts, real duration)
+    {
+        unsigned i, index;
+        Vector3 velocityChange[2], rotationChange[2];
+        real max;
+        Vector3 cp;
+
+        velocityIterationsUsed = 0;
+        while (velocityIterationsUsed < velocityIterations)
+        {
+            max = velocityEpsilon;
+            index = numContacts;
+            for (i = 0; i < numContacts; i++)
+            {
+                if (c[i].contactVelocity.x < max)
+                {
+                    max = c[i].contactVelocity.x;
+                    index = i;
+                }
+            }
+
+            if (index == numContacts) break;
+
+            c[index].resolveVelocity(duration);
+
+            velocityIterationsUsed++;
+        }
+    }
+
+    void ContactResolver::resolveContacts(Contact* contacts, unsigned numContacts, real duration)
+    {
+        if (numContacts == 0) return;
+
+        prepareContacts(contacts, numContacts, duration);
+        adjustPositions(contacts, numContacts, duration);
+        adjustVelocities(contacts, numContacts, duration);
+    }
+
+} // namespace cyclone
