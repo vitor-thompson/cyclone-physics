@@ -1,97 +1,131 @@
 /*
- * Implementação do corpo rígido (RigidBody) do motor Cyclone.
+ * Implementação de Corpos Rígidos do motor Cyclone.
  * Parte do livro Game Physics Engine Development por Ian Millington.
+ * Atualizado com suporte a estabilidade de quatérnios e sistema de sono (Capítulo 16).
  */
 
-#include "cyclone/bodies.h"
+#include "cyclone/body.h"
+#include <memory.h>
+#include <assert.h>
 
 namespace cyclone {
 
-    RigidBody::RigidBody()
-        : inverseMass(0),
-          linearDamping(0.95f),
-          angularDamping(0.8f),
-          isAwake(true),
-          canSleep(true)
-    {
-        orientation.setIdentity();
-        velocity.clear();
-        rotation.clear();
-        acceleration.clear();
-        accelerationAtUpdate.clear();
-        forceAccum.clear();
-        torqueAccum.clear();
+    // Variável global ou estática para o limiar de sono (sleep epsilon)
+    static real g_sleepEpsilon = (real)0.01f;
+
+    void setSleepEpsilon(real epsilon) {
+        g_sleepEpsilon = epsilon;
     }
 
-    RigidBody::~RigidBody()
-    {
+    real getSleepEpsilon() {
+        return g_sleepEpsilon;
     }
 
     void RigidBody::calculateDerivedData()
     {
         orientation.normalize();
-
-        // Constrói a matriz de transformação 4x4 a partir de posição e orientação
         transformMatrix.setOrientationAndPos(orientation, position);
 
-        // Calcula o tensor de inércia inverso no espaço do mundo
-        transformMatrix.transformInertiaTensor(inverseInertiaTensorWorld, inverseInertiaTensor, transformMatrix);
+        calculateInverseInertiaTensorWorld(
+            &inverseInertiaTensorWorld,
+            inverseInertiaTensor,
+            transformMatrix
+        );
     }
 
     void RigidBody::integrate(real duration)
     {
+        // Se o corpo estiver dormindo, não gasta processamento integrando
         if (!isAwake) return;
 
-        // Calcula a aceleração linear final a partir das forças acumuladas
-        acceleration = accelerationAtUpdate;
-        acceleration.addScaledVector(forceAccum, inverseMass);
+        // 1. Calcula a aceleração linear acumulada
+        lastFrameAcceleration = acceleration;
+        lastFrameAcceleration += forceAccumulator * inverseMass;
 
-        // Calcula a aceleração angular a partir dos torques acumulados
-        Vector3 angularAcceleration = inverseInertiaTensorWorld.transform(torqueAccum);
+        // 2. Calcula a aceleração angular a partir dos torques
+        Vector3 angularAcceleration = inverseInertiaTensorWorld.transform(torqueAccumulator);
 
-        // Atualiza a velocidade linear (com amortecimento)
-        velocity.addScaledVector(acceleration, duration);
+        // 3. Atualiza velocidades linear e angular
+        velocity += lastFrameAcceleration * duration;
+        rotation += angularAcceleration * duration;
+
+        // 4. Aplica amortecimento (drag)
         velocity *= real_pow(linearDamping, duration);
-
-        // Atualiza a velocidade angular (com amortecimento)
-        rotation.addScaledVector(angularAcceleration, duration);
         rotation *= real_pow(angularDamping, duration);
 
-        // Atualiza a posição linear
-        position.addScaledVector(velocity, duration);
-
-        // Atualiza a orientação (usando o quatérnio de rotação)
+        // 5. Atualiza posição e orientação
+        position += velocity * duration;
         orientation.addScaledVector(rotation, duration);
 
-        // Recalcula dados derivados (matriz e tensor de inércia)
+        // CORREÇÃO DE ESTABILIDADE (Capítulo 16.1.1): Normalização do quatérnio
+        orientation.normalize();
+
+        // 6. Reconstrói matrizes de transformação e tensores
         calculateDerivedData();
 
-        // Limpa os acumuladores e guarda a aceleração para o próximo quadro
-        clearAccumulators();
+        // 7. Limpa acumuladores e atualiza métrica de movimento para o sistema de sono
+        clearAccumulators(duration);
     }
 
-    void RigidBody::clearAccumulators()
+    void RigidBody::clearAccumulators(real duration)
     {
-        forceAccum.clear();
-        torqueAccum.clear();
-        accelerationAtUpdate = acceleration;
+        forceAccumulator = Vector3::ZERO;
+        torqueAccumulator = Vector3::ZERO;
+        lastFrameAcceleration = acceleration;
+
+        // Atualiza a métrica de movimento usando Média Ponderada Recente (RWA) se puder dormir
+        if (canSleep)
+        {
+            real currentMotion = velocity.scalarProduct(velocity) + rotation.scalarProduct(rotation);
+            
+            // Viés baseado na duração do quadro
+            real bias = real_pow(0.5f, duration);
+            motion = bias * motion + (1.0f - bias) * currentMotion;
+
+            // Limita o movimento para evitar valores absurdos após picos de velocidade
+            if (motion > 10.0f * g_sleepEpsilon) {
+                motion = 10.0f * g_sleepEpsilon;
+            }
+
+            // Se o movimento caiu abaixo do limite, coloca o corpo para dormir
+            if (motion < g_sleepEpsilon) {
+                setAsleep(true);
+            }
+        }
+    }
+
+    void RigidBody::setAwake(const bool awake)
+    {
+        if (awake) {
+            isAwake = true;
+            // Garante um pouco de movimento inicial para evitar que durma imediatamente
+            motion = g_sleepEpsilon * 2.0f;
+        } else {
+            isAwake = false;
+            velocity.clear();
+            rotation.clear();
+            motion = 0.0f;
+        }
+    }
+
+    void RigidBody::setAsleep(bool asleep)
+    {
+        setAwake(!asleep);
     }
 
     void RigidBody::addForce(const Vector3 &force)
     {
-        forceAccum += force;
-        isAwake = true;
+        forceAccumulator += force;
+        setAwake(true);
     }
 
     void RigidBody::addForceAtPoint(const Vector3 &force, const Vector3 &point)
     {
-        Vector3 pt = point;
-        pt -= position;
-
-        forceAccum += force;
-        torqueAccum += pt % force;
-
-        isAwake = true;
+        // Converte ponto do mundo para coordenada relativa ao centro de massa
+        Vector3 pt = point - position;
+        forceAccumulator += force;
+        torqueAccumulator += pt % force;
+        setAwake(true);
     }
 
     void RigidBody::addForceAtBodyPoint(const Vector3 &force, const Vector3 &point)
@@ -100,110 +134,38 @@ namespace cyclone {
         addForceAtPoint(force, pt);
     }
 
-    // Setters e Getters básicos
-    void RigidBody::setMass(real mass)
+    void RigidBody::addTorque(const Vector3 &torque)
     {
-        if (mass <= 0) {
-            inverseMass = 0;
-        } else {
-            inverseMass = (real)1.0f / mass;
-        }
+        torqueAccumulator += torque;
+        setAwake(true);
     }
 
-    real RigidBody::getMass() const
+    // Função auxiliar estática para rotação do tensor de inércia
+    void RigidBody::calculateInverseInertiaTensorWorld(
+        Matrix3 *iitWorld, 
+        const Matrix3 &iitBody, 
+        const Matrix4 &rotmat
+    )
     {
-        if (inverseMass == 0) {
-            return REAL_MAX;
-        } else {
-            return (real)1.0f / inverseMass;
-        }
-    }
+        real t4 = rotmat.data[0]*iitBody.data[0]+rotmat.data[1]*iitBody.data[3]+rotmat.data[2]*iitBody.data[6];
+        real t9 = rotmat.data[0]*iitBody.data[1]+rotmat.data[1]*iitBody.data[4]+rotmat.data[2]*iitBody.data[7];
+        real t14 = rotmat.data[0]*iitBody.data[2]+rotmat.data[1]*iitBody.data[5]+rotmat.data[2]*iitBody.data[8];
+        real t28 = rotmat.data[4]*iitBody.data[0]+rotmat.data[5]*iitBody.data[3]+rotmat.data[6]*iitBody.data[6];
+        real t33 = rotmat.data[4]*iitBody.data[1]+rotmat.data[5]*iitBody.data[4]+rotmat.data[6]*iitBody.data[7];
+        real t38 = rotmat.data[4]*iitBody.data[2]+rotmat.data[5]*iitBody.data[5]+rotmat.data[6]*iitBody.data[8];
+        real t52 = rotmat.data[8]*iitBody.data[0]+rotmat.data[9]*iitBody.data[3]+rotmat.data[10]*iitBody.data[6];
+        real t57 = rotmat.data[8]*iitBody.data[1]+rotmat.data[9]*iitBody.data[4]+rotmat.data[10]*iitBody.data[7];
+        real t62 = rotmat.data[8]*iitBody.data[2]+rotmat.data[9]*iitBody.data[5]+rotmat.data[10]*iitBody.data[8];
 
-    void RigidBody::setInverseMass(real inverseMass)
-    {
-        this->inverseMass = inverseMass;
-    }
-
-    real RigidBody::getInverseMass() const
-    {
-        return inverseMass;
-    }
-
-    bool RigidBody::hasFiniteMass() const
-    {
-        return inverseMass > 0;
-    }
-
-    void RigidBody::setPosition(const Vector3 &position)
-    {
-        this->position = position;
-    }
-
-    void RigidBody::getPosition(Vector3 *position) const
-    {
-        *position = this->position;
-    }
-
-    Vector3 RigidBody::getPosition() const
-    {
-        return position;
-    }
-
-    void RigidBody::setOrientation(const Quaternion &orientation)
-    {
-        this->orientation = orientation;
-        this->orientation.normalize();
-    }
-
-    void RigidBody::getOrientation(Quaternion *orientation) const
-    {
-        *orientation = this->orientation;
-    }
-
-    Quaternion RigidBody::getOrientation() const
-    {
-        return orientation;
-    }
-
-    void RigidBody::setVelocity(const Vector3 &velocity)
-    {
-        this->velocity = velocity;
-    }
-
-    void RigidBody::getVelocity(Vector3 *velocity) const
-    {
-        *velocity = this->velocity;
-    }
-
-    Vector3 RigidBody::getVelocity() const
-    {
-        return velocity;
-    }
-
-    void RigidBody::setRotation(const Vector3 &rotation)
-    {
-        this->rotation = rotation;
-    }
-
-    void RigidBody::getRotation(Vector3 *rotation) const
-    {
-        *rotation = this->rotation;
-    }
-
-    Vector3 RigidBody::getRotation() const
-    {
-        return rotation;
-    }
-
-    void RigidBody::setAwake(bool awake)
-    {
-        if (awake) {
-            isAwake = true;
-        } else {
-            isAwake = false;
-            velocity.clear();
-            rotation.clear();
-        }
+        iitWorld->data[0] = t4*rotmat.data[0]+t9*rotmat.data[1]+t14*rotmat.data[2];
+        iitWorld->data[1] = t4*rotmat.data[4]+t9*rotmat.data[5]+t14*rotmat.data[6];
+        iitWorld->data[2] = t4*rotmat.data[8]+t9*rotmat.data[9]+t14*rotmat.data[10];
+        iitWorld->data[3] = t28*rotmat.data[0]+t33*rotmat.data[1]+t38*rotmat.data[2];
+        iitWorld->data[4] = t28*rotmat.data[4]+t33*rotmat.data[5]+t38*rotmat.data[6];
+        iitWorld->data[5] = t28*rotmat.data[8]+t33*rotmat.data[9]+t38*rotmat.data[10];
+        iitWorld->data[6] = t52*rotmat.data[0]+t57*rotmat.data[1]+t62*rotmat.data[2];
+        iitWorld->data[7] = t52*rotmat.data[4]+t57*rotmat.data[5]+t62*rotmat.data[6];
+        iitWorld->data[8] = t52*rotmat.data[8]+t57*rotmat.data[9]+t62*rotmat.data[10];
     }
 
 } // namespace cyclone
