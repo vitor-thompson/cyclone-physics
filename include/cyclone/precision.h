@@ -1,21 +1,61 @@
-#pragma once
+/*
+ * Arquivo de precisão e tipos do motor Cyclone.
+ * Parte do livro Game Physics Engine Development por Ian Millington.
+ */
 
-#include <cmath>
+#ifndef CYCLONE_PRECISION_H
+#define CYCLONE_PRECISION_H
+
+#include <math.h>
+#include <float.h>
 
 namespace cyclone {
-    // Define se usamos float ou double para os cálculos do motor
+
+    /**
+     * Define o tipo real usado em todo o motor. 
+     * Pode ser alterado para 'double' se maior precisão numérica for necessária.
+     */
     typedef float real;
 
-    // Função de raiz quadrada compatível com a precisão escolhida
-    inline real real_sqrt(real val) {
-        return sqrtf(val);
+    #define REAL_MAX FLT_MAX
+
+    /**
+     * Funções matemáticas em precisão real para garantir portabilidade
+     * e facilitar a alternância entre float e double.
+     */
+    inline real real_sqrt(real x)
+    {
+        return sqrtf(x);
     }
 
-    // --- NOVO: Precisão para o operador de potência (usado no damping) ---
-    #define real_pow powf
-    #define real_abs fabsf
-    #define real_sin sinf
-    #define real_cos cosf
-    #define real_exp expf
+    inline real real_abs(real x)
+    {
+        return fabsf(x);
+    }
 
-}
+    inline real real_sin(real x)
+    {
+        return sinf(x);
+    }
+
+    inline real real_cos(real x)
+    {
+        return cosf(x);
+    }
+
+    inline real real_exp(real x)
+    {
+        return expf(x);
+    }
+
+    inline real real_pow(real x, real y)
+    {
+        return powf(x, y);
+    }
+
+    // Constante matemática Pi em precisão real
+    #define R_PI 3.14159265f
+
+} // namespace cyclone
+
+#endif // CYCLONE_PRECISION_H
