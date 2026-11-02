@@ -1,6 +1,11 @@
 /*
- * Interface de detecção fina e geração de contatos do motor Cyclone.
- * Parte do livro Game Physics Engine Development por Ian Millington.
+ * collide_fine.h
+ * 
+ * Este arquivo define o sistema de detecção fina de colisão para corpos rígidos
+ * no motor físico Cyclone. Inclui primitivas geométricas (esferas, planos, caixas OBB)
+ * e algoritmos de teste de intersecção e geração de contatos de corpo rígido.
+ * 
+ * Parte da biblioteca física Cyclone.
  */
 
 #ifndef CYCLONE_COLLIDE_FINE_H
@@ -12,140 +17,81 @@
 
 namespace cyclone {
 
-    /**
-     * Estrutura auxiliar contendo informações para o detector registrar 
-     * os dados de contato gerados na fase fina.
-     */
-    struct CollisionData
-    {
-        /** Apontador para o vetor de contatos onde os resultados serão gravados. */
-        Contact *contacts;
-
-        /** Número máximo de contatos que ainda podem ser adicionados. */
-        unsigned contactsLeft;
-
-        /** Quantidade total de contatos encontrados até o momento. */
-        unsigned contactCount;
-
-        /** Coeficientes globais de fricção e restituição padrão para os contatos. */
-        real friction;
-        real restitution;
-        real tolerance;
-
-        /** Retorna verdadeiro se ainda há espaço no vetor para novos contatos. */
-        bool hasMoreContacts() const
-        {
-            return contactsLeft > 0;
-        }
-
-        /** Reinicia os contadores para um novo quadro de simulação. */
-        void reset(unsigned maxContacts)
-        {
-            contactsLeft = maxContacts;
-            contactCount = 0;
-        }
-
-        /** Avança o ponteiro e atualiza os contadores após registrar novos contatos. */
-        void addContacts(unsigned count)
-        {
-            contactsLeft -= count;
-            contactCount += count;
-            contacts += count;
-        }
-    };
+/**
+ * @brief Representa uma primitiva geométrica base associada a um corpo rígido.
+ */
+class CollisionPrimitive {
+public:
+    RigidBody *body; // Corpo rígido ao qual esta primitiva está acoplada
+    Matrix4 offset;  // Transformação offset relativa ao centro de massa do corpo
 
     /**
-     * Classe base para primitivas geométricas de colisão. Permite posicionar
-     * e rotacionar formas de colisão deslocadas do centro de massa do corpo rígido.
+     * @brief Retorna a matriz de transformação no espaço do mundo para esta primitiva.
      */
-    class Primitive
-    {
-    public:
-        /** O corpo rígido associado a esta geometria de colisão. */
-        RigidBody *body;
+    Matrix4 getTransform() const;
+};
 
-        /** Matriz de transformação local que afasta a primitiva da origem do corpo. */
-        Matrix4 offset;
+/**
+ * @brief Primitiva geométrica de Esfera de Colisão.
+ */
+class CollisionSphere : public CollisionPrimitive {
+public:
+    real radius; // Raio da esfera
+};
 
-        /** Retorna a matriz de transformação final da primitiva no espaço global do mundo. */
-        Matrix4 getTransform() const
-        {
-            return body->getTransform() * offset;
-        }
+/**
+ * @brief Primitiva geométrica de Plano (ex: solo infinito).
+ */
+class CollisionPlane {
+public:
+    Vector3 direction; // Vetor normal do plano
+    real offset;       // Distância do plano até a origem do mundo ao longo da normal
+};
 
-        /** Atalho para extrair um eixo ou vetor de posição da matriz transformada. */
-        Vector3 getAxis(unsigned index) const
-        {
-            return getTransform().getAxis(index);
-        }
-    };
+/**
+ * @brief Primitiva geométrica de Caixa Orientada (OBB - Oriented Bounding Box).
+ */
+class CollisionBox : public CollisionPrimitive {
+public:
+    Vector3 halfSize; // Metade das dimensões da caixa (extensões ao longo dos eixos locais X, Y, Z)
+};
 
-    /**
-     * Representa uma primitiva esférica de colisão.
-     */
-    class Sphere : public Primitive
-    {
-    public:
-        real radius;
-    };
+/**
+ * @brief Contém algoritmos estáticos para testes rápidos de intersecção geométrica.
+ */
+class IntersectionTests {
+public:
+    static bool sphereAndSphere(const CollisionSphere &one, const CollisionSphere &two);
+    static bool sphereAndHalfSpace(const CollisionSphere &sphere, const CollisionPlane &plane);
+    static bool boxAndBox(const CollisionBox &one, const CollisionBox &two);
+    static bool boxAndHalfSpace(const CollisionBox &box, const CollisionPlane &plane);
+};
 
-    /**
-     * Representa um plano fixo no mundo (ex: chão ou paredes).
-     */
-    class Plane : public Primitive
-    {
-    public:
-        Vector3 normal;
-        real offset;
-    };
+/**
+ * @brief Contém algoritmos para gerar dados detalhados de contato de corpos rígidos durante colisões.
+ */
+class CollisionDetector {
+public:
+    static unsigned sphereAndSphere(const CollisionSphere &one,
+                                    const CollisionSphere &two,
+                                    CollisionData *data);
 
-    /**
-     * Representa uma caixa rígida orientada (OBB) para colisão detalhada.
-     */
-    class Box : public Primitive
-    {
-    public:
-        /** As distâncias do centro até as faces da caixa em cada eixo local. */
-        Vector3 halfSize;
-    };
+    static unsigned sphereAndHalfSpace(const CollisionSphere &sphere,
+                                       const CollisionPlane &plane,
+                                       CollisionData *data);
 
-    /**
-     * Classe estática responsável por agrupar os algoritmos de detecção fina
-     * e geração de contatos entre as diferentes primitivas geométricas.
-     */
-    class CollisionDetector
-    {
-    public:
-        static unsigned sphereAndSphere(
-            const Sphere &one,
-            const Sphere &two,
-            CollisionData *data
-        );
+    static unsigned sphereAndBox(const CollisionSphere &sphere,
+                                 const CollisionBox &box,
+                                 CollisionData *data);
 
-        static unsigned sphereAndPlane(
-            const Sphere &sphere,
-            const Plane &plane,
-            CollisionData *data
-        );
+    static unsigned boxAndHalfSpace(const CollisionBox &box,
+                                    const CollisionPlane &plane,
+                                    CollisionData *data);
 
-        static unsigned boxAndPlane(
-            const Box &box,
-            const Plane &plane,
-            CollisionData *data
-        );
-
-        static unsigned boxAndSphere(
-            const Box &box,
-            const Sphere &sphere,
-            CollisionData *data
-        );
-
-        static unsigned boxAndBox(
-            const Box &one,
-            const Box &two,
-            CollisionData *data
-        );
-    };
+    static unsigned boxAndBox(const CollisionBox &one,
+                              const CollisionBox &box,
+                              CollisionData *data);
+};
 
 } // namespace cyclone
 
