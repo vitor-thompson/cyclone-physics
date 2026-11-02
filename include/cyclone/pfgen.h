@@ -1,162 +1,112 @@
-#pragma once
+/*
+ * pfgen.h
+ * 
+ * Este arquivo define o sistema de geradores de força para partículas no motor físico Cyclone.
+ * Ele inclui a interface base 'ParticleForceGenerator' e a classe 'ParticleForceRegistry',
+ * responsável por mapear quais forças devem ser aplicadas a quais partículas a cada quadro (frame).
+ * 
+ * Parte da biblioteca física Cyclone.
+ */
 
-#include <cyclone/particle.h>
+#ifndef CYCLONE_PFGEN_H
+#define CYCLONE_PFGEN_H
+
+#include "particle.h"
 #include <vector>
 
 namespace cyclone {
+
+/**
+ * @brief Interface para geradores de força que atuam sobre partículas.
+ */
+class ParticleForceGenerator {
+public:
     /**
-     * @brief Interface base para qualquer gerador de força no motor Cyclone.
+     * @brief Sobrescreva este método para calcular e aplicar a força à partícula informada.
+     * 
+     * @param particle Ponteiro para a partícula que receberá a força.
+     * @param duration Intervalo de tempo (delta time) do quadro atual.
      */
-    class ParticleForceGenerator
-    {
-    public:
-        virtual ~ParticleForceGenerator() {}
-        virtual void updateForce(Particle *particle, real duration) = 0;
+    virtual void updateForce(Particle *particle, real duration) = 0;
+};
+
+/**
+ * @brief Gerador de força da gravidade simples.
+ */
+class ParticleGravity : public ParticleForceGenerator {
+    Vector3 gravity; // Aceleração da gravidade
+
+public:
+    ParticleGravity(const Vector3 &gravity);
+    virtual void updateForce(Particle *particle, real duration);
+};
+
+/**
+ * @brief Gerador de força de atrito com o ar/arrasto (Drag).
+ */
+class ParticleDrag : public ParticleForceGenerator {
+    real k1; // Coeficiente de arrasto de velocidade linear
+    real k2; // Coeficiente de arrasto de velocidade quadrática
+
+public:
+    ParticleDrag(real k1, real k2);
+    virtual void updateForce(Particle *particle, real duration);
+};
+
+/**
+ * @brief Gerador de força de mola ancorada a um ponto fixo no espaço.
+ */
+class ParticleAnchoredSpring : public ParticleForceGenerator {
+protected:
+    Vector3 *anchor; // Ponto de ancoragem da mola
+    real springConstant; // Constante elástica da mola (k)
+    real restLength; // Comprimento de repouso da mola
+
+public:
+    ParticleAnchoredSpring(Vector3 *anchor, real springConstant, real restLength);
+    virtual void updateForce(Particle *particle, real duration);
+};
+
+/**
+ * @brief Registro central para gerenciar e aplicar múltiplos geradores de força a partículas.
+ */
+class ParticleForceRegistry {
+protected:
+    /**
+     * @brief Estrutura interna que associa uma partícula a um gerador de força.
+     */
+    struct ParticleForceRegistration {
+        Particle *particle;
+        ParticleForceGenerator *fg;
     };
 
+    typedef std::vector<ParticleForceRegistration> Registry;
+    Registry registrations;
+
+public:
     /**
-     * @brief Gerador de força que aplica uma força gravitacional. 
-     * @details Uma única instância pode ser compartilhada por múltiplas partículas.
+     * @brief Registra um par de partícula e gerador de força.
      */
-    class ParticleGravity : public ParticleForceGenerator
-    {
-    protected:
-        /** Armazena a aceleração devido à gravidade. */
-        Vector3 gravity;
-
-    public:
-        /** Cria o gerador com a aceleração de gravidade fornecida. */
-        ParticleGravity(const Vector3 &gravity);
-
-        /** Aplica a força gravitacional à partícula dada. */
-        virtual void updateForce(Particle *particle, real duration);
-    };
+    void add(Particle *particle, ParticleForceGenerator *fg);
 
     /**
-     * @brief Gerador de força que aplica resistência do ar / arrasto (drag).
-     * @details Uma única instância pode ser compartilhada por múltiplas partículas.
+     * @brief Remove o registro entre uma partícula e um gerador de força.
      */
-    class ParticleDrag : public ParticleForceGenerator
-    {
-    protected:
-        /** Coeficiente de arrasto linear (dependente da velocidade). */
-        real k1;
-        /** Coeficiente de arrasto quadrático (dependente da velocidade ao quadrado). */
-        real k2;
-
-    public:
-        /** Cria o gerador com os coeficientes de arrasto fornecidos. */
-        ParticleDrag(real k1, real k2);
-
-        /** Aplica a força de arrasto à partícula dada. */
-        virtual void updateForce(Particle *particle, real duration);
-    };
+    void remove(Particle *particle, ParticleForceGenerator *fg);
 
     /**
-     * @brief Gerador de força que aplica uma força elástica (Lei de Hooke) entre duas partículas.
+     * @brief Limpa todos os registros cadastrados.
      */
-    class ParticleSpring : public ParticleForceGenerator
-    {
-    protected:
-        /** A partícula na outra extremidade da mola. */
-        Particle *other;
-        /** Constante elástica (rigidez) da mola. */
-        real springConstant;
-        /** Comprimento de repouso da mola. */
-        real restLength;
-
-    public:
-        /** Cria uma nova mola com os parâmetros fornecidos. */
-        ParticleSpring(Particle *other, real springConstant, real restLength);
-
-        /** Aplica a força de mola à partícula dada. */
-        virtual void updateForce(Particle *particle, real duration);
-    };
+    void clear();
 
     /**
-     * @brief Gerador de força que aplica uma força elástica onde uma das extremidades é fixa no espaço (âncora).
+     * @brief Atualiza e aplica todas as forças registradas às suas respectivas partículas.
+     * 
+     * @param duration Intervalo de tempo (delta time) do quadro.
      */
-    class ParticleAnchoredSpring : public ParticleForceGenerator
-    {
-    protected:
-        /** A posição do ponto fixo (âncora) no espaço. */
-        Vector3 *anchor;
-        /** Constante elástica (rigidez) da mola. */
-        real springConstant;
-        /** Comprimento de repouso da mola. */
-        real restLength;
+    void updateForces(real duration);
+};
 
-    public:
-        /** Cria uma nova mola ancorada com os parâmetros fornecidos. */
-        ParticleAnchoredSpring(Vector3 *anchor, real springConstant, real restLength);
+} // namespace cyclone
 
-        /** Aplica a força de mola ancorada à partícula dada. */
-        virtual void updateForce(Particle *particle, real duration);
-    };
-
-    /**
-     * @brief Gerador de força que aplica uma força elástica (bungee) apenas quando esticado.
-     */
-    class ParticleBungee : public ParticleForceGenerator
-    {
-    protected:
-        /** A partícula na outra extremidade do elástico. */
-        Particle *other;
-        /** Constante elástica do bungee. */
-        real springConstant;
-        /** O comprimento a partir do qual o bungee começa a gerar força. */
-        real restLength;
-
-    public:
-        /** Cria um novo bungee com os parâmetros fornecidos. */
-        ParticleBungee(Particle *other, real springConstant, real restLength);
-
-        /** Aplica a força do bungee à partícula dada (apenas se esticada). */
-        virtual void updateForce(Particle *particle, real duration);
-    };
-
-    /**
-     * @brief Gerador de força que aplica empuxo (flutuação) para um plano de líquido paralelo ao plano XZ.
-     */
-    class ParticleBuoyancy : public ParticleForceGenerator
-    {
-    protected:
-        /** A profundidade máxima de submersão do objeto antes de gerar força máxima. */
-        real maxDepth;
-        /** O volume do objeto. */
-        real volume;
-        /** A altura da superfície da água (plano paralelo a XZ). */
-        real waterHeight;
-        /** A densidade do líquido (água pura = 1000 kg/m^3). */
-        real liquidDensity;
-
-    public:
-        /** Cria um novo gerador de empuxo com os parâmetros fornecidos. */
-        ParticleBuoyancy(real maxDepth, real volume, real waterHeight, real liquidDensity = 1000.0f);
-
-        /** Aplica a força de empuxo à partícula dada. */
-        virtual void updateForce(Particle *particle, real duration);
-    };
-
-    /**
-     * @brief Registro central que gerencia quais forças se aplicam a quais partículas.
-     */
-    class ParticleForceRegistry
-    {
-    protected:
-        struct ParticleForceRegistration
-        {
-            Particle *particle;
-            ParticleForceGenerator *fg;
-        };
-
-        typedef std::vector<ParticleForceRegistration> Registry;
-        Registry registrations;
-
-    public:
-        void add(Particle* particle, ParticleForceGenerator *fg);
-        void remove(Particle* particle, ParticleForceGenerator *fg);
-        void clear();
-        void updateForces(real duration);
-    };
-}
+#endif // CYCLONE_PFGEN_H
