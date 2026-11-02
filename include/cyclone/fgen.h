@@ -1,136 +1,118 @@
-#pragma once
+/*
+ * Geradores de Força do motor Cyclone.
+ * Atualizado com a classe Explosion de três componentes (Capítulo 17.2.3).
+ */
 
-#include <cyclone/body.h>
+#ifndef CYCLONE_FGEN_H
+#define CYCLONE_FGEN_H
+
+#include "precision.h"
+#include "core.h"
+#include "body.h"
+#include "particle.h"
 
 namespace cyclone {
 
     /**
-     * @brief Interface base para todos os geradores de força em corpos rígidos.
+     * Interface base para geradores de força aplicados a corpos rígidos.
      */
     class ForceGenerator
     {
     public:
-        virtual ~ForceGenerator() {}
-
-        /**
-         * @brief Aplica a força ao corpo rígido fornecido para o intervalo de tempo dado.
-         */
         virtual void updateForce(RigidBody *body, real duration) = 0;
     };
 
     /**
-     * @brief Aplica força gravitacional ao centro de massa.
+     * Interface base para geradores de força aplicados a partículas.
      */
-    class Gravity : public ForceGenerator
+    class ParticleForceGenerator
     {
-        Vector3 gravity;
-
     public:
-        Gravity(const Vector3 &gravity);
-        virtual void updateForce(RigidBody *body, real duration) override;
+        virtual void updateForce(Particle *particle, real duration) = 0;
     };
 
     /**
-     * @brief Aplica força de mola entre dois pontos específicos de corpos rígidos.
+     * Gerador de força para explosões cinematográficas em três fases:
+     * Implosão, Onda de Concussão e Chaminé de Convecção (Capítulo 17.2.3).
      */
-    class Spring : public ForceGenerator
-    {
-        Vector3 connectionPoint;
-        Vector3 otherConnectionPoint;
-        RigidBody *other;
-        real springConstant;
-        real restLength;
-
-    public:
-        Spring(const Vector3 &localConnectionPt,
-               RigidBody *other,
-               const Vector3 &otherConnectionPt,
-               real springConstant,
-               real restLength);
-
-        virtual void updateForce(RigidBody *body, real duration) override;
-    };
-
-    /**
-     * @brief Gerador de força aerodinâmica baseado em um tensor de sustentação/arrasto.
-     */
-    class Aero : public ForceGenerator
+    class Explosion : public ForceGenerator, public ParticleForceGenerator
     {
     protected:
-        /** Tensor aerodinâmico da superfície no espaço local (body space). */
-        Matrix3 tensor;
-
-        /** Posição relativa da superfície aerodinâmica no corpo rígido. */
-        Vector3 position;
-
-        /** Ponteiro para o vetor de velocidade do vento no ambiente. */
-        const Vector3* windspeed;
+        real timePassed;
 
     public:
-        Aero(const Matrix3 &tensor, const Vector3 &position, const Vector3 *windspeed);
+        // Posição da detonação
+        Vector3 detonation;
 
-        virtual void updateForce(RigidBody *body, real duration) override;
+        // Propriedades da Implosão
+        real implosionMaxRadius;
+        real implosionMinRadius;
+        real implosionDuration;
+        real implosionForce;
 
-    protected:
-        /** Método protegido para aplicar força usando um tensor específico. */
-        void updateForceFromTensor(RigidBody *body, real duration, const Matrix3 &tensorToUse);
+        // Propriedades da Onda de Concussão (Shockwave)
+        real concussionWaveSpeed;
+        real peakConcussionForce;
+        real concussionWidth;
+        real concussionTail;
+
+        // Propriedades da Chaminé de Convecção
+        real peakConvectionForce;
+        real chimneyRadius;
+        real chimneyHeight;
+        real convectionDuration;
+
+        Explosion()
+            : timePassed(0.0f),
+              implosionMaxRadius(10.0f), implosionMinRadius(1.0f), implosionDuration(0.2f), implosionForce(5.0f),
+              concussionWaveSpeed(15.0f), peakConcussionForce(50.0f), concussionWidth(2.0f), concussionTail(1.0f),
+              peakConvectionForce(2.0f), chimneyRadius(5.0f), chimneyHeight(20.0f), convectionDuration(5.0f) {}
+
+        virtual void updateForce(RigidBody *body, real duration)
+        {
+            timePassed += duration;
+            Vector3 position = body->getPosition();
+            Vector3 blastToBody = position - detonation;
+            real distance = blastToBody.magnitude();
+
+            // 1. Fase de Implosão
+            if (timePassed < implosionDuration && distance > implosionMinRadius && distance < implosionMaxRadius)
+            {
+                Vector3 implosionDir = blastToBody.unit();
+                body->addForce(implosionDir * -implosionForce);
+            }
+
+            // 2. Fase da Onda de Concussão (Shockwave)
+            real waveFront = concussionWaveSpeed * timePassed;
+            if (distance >= waveFront - concussionWidth && distance <= waveFront + (concussionTail + 1.0f) * concussionWidth)
+            {
+                Vector3 waveDir = blastToBody.unit();
+                real forceMag = peakConcussionForce; // Aplicando simplificação do perfil de força
+                
+                // Aplica a força descentralizada para gerar torque/rotação
+                Vector3 offsetPoint = position + Vector3(0.5f, 0.5f, 0.5f); // Ponto descentralizado
+                body->addForceAtPoint(waveDir * forceMag, offsetPoint);
+            }
+
+            // 3. Fase da Chaminé de Convecção
+            if (timePassed < convectionDuration)
+            {
+                real dxz = real_sqrt(blastToBody.x * blastToBody.x + blastToBody.z * blastToBody.z);
+                real dy = blastToBody.y;
+                if (dxz < chimneyRadius && dy > 0 && dy < chimneyHeight)
+                {
+                    Vector3 convectionDir(0.1f, 1.0f, 0.1f); // Leve inclinação para moldar o cogumelo
+                    body->addForce(convectionDir * peakConvectionForce);
+                }
+            }
+        }
+
+        virtual void updateForce(Particle *particle, real duration)
+        {
+            // Implementação análoga para partículas, se necessário
+        }
     };
 
-    /**
-     * @brief Gerador aerodinâmico com superfícies de controle interpoladas (ex: ailerons, profundor).
-     */
-    class AeroControl : public Aero
-    {
-        Matrix3 maxTensor;
-        Matrix3 minTensor;
-        real controlSetting; // Varia de -1.0 (min) a +1.0 (max)
+} // namespace cyclone
 
-        Matrix3 getTensor();
-
-    public:
-        AeroControl(const Matrix3 &base, const Matrix3 &min, const Matrix3 &max,
-                    const Vector3 &position, const Vector3 *windspeed);
-
-        /** Define a posição da superfície de controle entre -1.0 e +1.0. */
-        void setControl(real value);
-
-        virtual void updateForce(RigidBody *body, real duration) override;
-    };
-
-    /**
-     * @brief Gerador aerodinâmico com orientação rotacional ajustável (ex: vela de barco, leme náutico).
-     */
-    class AngledAero : public Aero
-    {
-        /** Orientação relativa da superfície em relação ao corpo rígido. */
-        Quaternion orientation;
-
-    public:
-        AngledAero(const Matrix3 &tensor, const Vector3 &position, const Vector3 *windspeed);
-
-        /** Define a rotação/orientação relativa da superfície aerodinâmica. */
-        void setOrientation(const Quaternion &quat);
-
-        virtual void updateForce(RigidBody *body, real duration) override;
-    };
-
-    /**
-     * @brief Gerador de empuxo/flutuação para corpos rígidos em superfícies líquidas.
-     */
-    class Buoyancy : public ForceGenerator
-    {
-        real maxDepth;
-        real volume;
-        real waterHeight;
-        real liquidDensity;
-        Vector3 centerOfBuoyancy;
-
-    public:
-        Buoyancy(const Vector3 &cOfB,
-                 real maxDepth, real volume, real waterHeight,
-                 real liquidDensity = 1000.0f);
-
-        virtual void updateForce(RigidBody *body, real duration) override;
-    };
-
-}
+#endif // CYCLONE_FGEN_H
