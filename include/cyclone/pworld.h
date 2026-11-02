@@ -1,95 +1,106 @@
-#pragma once
+/*
+ * pworld.h
+ * 
+ * Este arquivo define a classe 'ParticleWorld', que encapsula o mundo de simulação física
+ * de partículas no motor Cyclone. Ele gerencia a lista de partículas ativas, o registro
+ * de forças, geradores de contato e a execução do passo de integração temporal.
+ * 
+ * Parte da biblioteca física Cyclone.
+ */
 
-#include <cyclone/particle.h>
-#include <cyclone/pfgen.h>
-#include <cyclone/pcontacts.h>
+#ifndef CYCLONE_PWORLD_H
+#define CYCLONE_PWORLD_H
+
+#include "core.h"
+#include "particle.h"
+#include "pfgen.h"
+#include "pcontacts.h"
 #include <vector>
 
 namespace cyclone {
 
+/**
+ * @brief Gerencia um conjunto de partículas, forças e contatos em uma simulação unificada.
+ */
+class ParticleWorld {
+public:
     /**
-     * @brief Interface polimórfica para geradores de contatos de partículas (detectores de colisão, links, etc).
+     * @brief Interface que gera contatos entre partículas ou entre partículas e o ambiente.
      */
-    class ParticleContactGenerator
-    {
+    class ParticleContactGenerator {
     public:
         /**
-         * Preenche o array de contatos fornecido com os contatos detectados.
-         * Retorna o número de contatos efetivamente gerados.
+         * @brief Preenche o array de contatos fornecido com os contatos gerados.
+         * 
+         * @param contact Ponteiro para o início do array de contatos disponíveis.
+         * @param limit Limite máximo de contatos que podem ser gerados.
+         * @return O número de contatos gerados.
          */
         virtual unsigned addContact(ParticleContact *contact, unsigned limit) const = 0;
     };
 
+protected:
+    typedef std::vector<Particle*> Particles;
+    Particles particles;
+
+    // Controla se o mundo calcula a verificação de contatos automaticamente
+    bool calculateIterations;
+
+    // Registro de geradores de força globais aplicados às partículas
+    ParticleForceRegistry registry;
+
+    // Resolvedor de contatos do mundo
+    ParticleContactResolver resolver;
+
+    typedef std::vector<ParticleContactGenerator*> ContactGenerators;
+    ContactGenerators contactGenerators;
+
+    // Array de contatos disponíveis para a simulação por quadro
+    ParticleContact *contacts;
+
+    // Limite máximo de contatos permitidos por quadro
+    unsigned maxContacts;
+
+public:
     /**
-     * @brief Gerencia um conjunto de partículas, geradores de força e geradores de contato,
-     * fornecendo o pipeline completo de simulação física por quadro.
+     * @brief Construtor do mundo de partículas.
+     * @param maxContacts Número máximo de contatos suportados por quadro.
+     * @param iterations Número de iterações do resolvedor de contatos.
      */
-    class ParticleWorld
-    {
-    public:
-        typedef std::vector<Particle*> Particles;
-        typedef std::vector<ParticleContactGenerator*> ContactGenerators;
+    ParticleWorld(unsigned maxContacts, unsigned iterations = 0);
 
-    protected:
-        /** Lista de partículas registradas no mundo. */
-        Particles particles;
+    /**
+     * @brief Destrutor. Libera recursos alocados.
+     */
+    ~ParticleWorld();
 
-        /** Registro de forças aplicadas às partículas. */
-        ParticleForceRegistry registry;
+    /**
+     * @brief Executa um passo de simulação (avança no tempo).
+     * @param duration Intervalo de tempo (delta time) do quadro.
+     */
+    void runPhysics(real duration);
 
-        /** Resolvedor de contatos de partículas. */
-        ParticleContactResolver resolver;
+    /**
+     * @brief Inicializa o mundo para um novo quadro de simulação.
+     */
+    void startFrame();
 
-        /** Lista de geradores de contato registrados. */
-        ContactGenerators contactGenerators;
+    /**
+     * @brief Retorna a lista de partículas cadastradas no mundo.
+     */
+    Particles& getParticles();
 
-        /** Array para armazenar os contatos do quadro atual. */
-        ParticleContact *contacts;
+    /**
+     * @brief Retorna o registro de forças do mundo.
+     */
+    ParticleForceRegistry& getForceRegistry();
 
-        /** Número máximo de contatos permitidos simultaneamente. */
-        unsigned maxContacts;
+    /**
+     * @brief Retorna a lista de geradores de contato do mundo.
+     */
+    ContactGenerators& getContactGenerators();
+};
 
-        /** Flag para recalcular iterativamente o limite de iterações do resolvedor a cada quadro. */
-        bool calculateIterations;
+} // namespace cyclone
 
-    public:
-        /**
-         * Cria um novo simulador do mundo de partículas.
-         */
-        ParticleWorld(unsigned maxContacts, unsigned iterations = 0);
-
-        /**
-         * Destrói o mundo e libera o array interno de contatos.
-         */
-        ~ParticleWorld();
-
-        /**
-         * Inicializa o mundo para um novo quadro zerando o acumulador de força de todas as partículas.
-         */
-        void startFrame();
-
-        /**
-         * Varre todos os geradores de contato registrados e coleta os contatos para o quadro.
-         */
-        unsigned generateContacts();
-
-        /**
-         * Avança o estado de todas as partículas no tempo usando o integrador.
-         */
-        void integrate(real duration);
-
-        /**
-         * Executa o pipeline completo da física para o quadro: forças -> integração -> contatos -> resolução.
-         */
-        void runPhysics(real duration);
-
-        /** Retorna a lista de partículas do mundo. */
-        Particles& getParticles() { return particles; }
-
-        /** Retorna o registro de forças do mundo. */
-        ParticleForceRegistry& getForceRegistry() { return registry; }
-
-        /** Adiciona um gerador de contatos ao mundo. */
-        void addContactGenerator(ParticleContactGenerator *generator);
-    };
-}
+#endif // CYCLONE_PWORLD_H
