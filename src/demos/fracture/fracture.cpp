@@ -1,7 +1,6 @@
 /*
- * Demonstração de Física de Fratura utilizando o motor Cyclone.
- * Parte do livro Game Physics Engine Development por Ian Millington.
- * Simula a quebra de blocos frágeis com base no ponto de impacto (Capítulo 17.2.2).
+ * Demonstração de Física de Fratura atualizada para o motor Cyclone.
+ * Implementa divisão de blocos on-the-fly e recálculo de inércia (Capítulo 17.2.2).
  */
 
 #include "cyclone/cyclone.h"
@@ -16,10 +15,6 @@ struct Block {
     cyclone::Matrix4 offset;
     bool exists;
 
-    /**
-     * Calcula e define a massa e o tensor de inércia deste bloco,
-     * assumindo uma densidade constante dada.
-     */
     void calculateMassProperties(cyclone::real invDensity)
     {
         if (invDensity <= 0)
@@ -64,10 +59,7 @@ public:
     void checkFractures(const cyclone::Contact* contacts, unsigned numContacts);
 };
 
-FractureDemo::FractureDemo() : numBlocks(0)
-{
-    // Inicialização da demonstração e do bloco principal de concreto...
-}
+FractureDemo::FractureDemo() : numBlocks(0) {}
 
 FractureDemo::~FractureDemo()
 {
@@ -76,10 +68,6 @@ FractureDemo::~FractureDemo()
     }
 }
 
-/**
- * Realiza a divisão do bloco fornecido em oito novos blocos menores
- * a partir do ponto de contato da colisão.
- */
 void FractureDemo::divideBlock(const cyclone::Contact& contact, Block* target, Block* newBlocks)
 {
     cyclone::Vector3 normal = contact.contactNormal;
@@ -92,7 +80,6 @@ void FractureDemo::divideBlock(const cyclone::Contact& contact, Block* target, B
 
     cyclone::Vector3 point = body->getPointInLocalSpace(contact.contactPoint);
     normal = body->getDirectionInLocalSpace(normal);
-
     point = point - normal * (point * normal);
 
     cyclone::Vector3 size = target->halfSize;
@@ -114,25 +101,17 @@ void FractureDemo::divideBlock(const cyclone::Contact& contact, Block* target, B
     for (unsigned i = 0; i < 8; i++)
     {
         cyclone::Vector3 min, max;
-        if ((i & 1) == 0) {
-            min.x = -size.x; max.x = point.x;
-        } else {
-            min.x = point.x; max.x = size.x;
-        }
-        if ((i & 2) == 0) {
-            min.y = -size.y; max.y = point.y;
-        } else {
-            min.y = point.y; max.y = size.y;
-        }
-        if ((i & 4) == 0) {
-            min.z = -size.z; max.z = point.z;
-        } else {
-            min.z = point.z; max.z = size.z;
-        }
+        if ((i & 1) == 0) { min.x = -size.x; max.x = point.x; }
+        else { min.x = point.x; max.x = size.x; }
+        
+        if ((i & 2) == 0) { min.y = -size.y; max.y = point.y; }
+        else { min.y = point.y; max.y = size.y; }
+        
+        if ((i & 4) == 0) { min.z = -size.z; max.z = point.z; }
+        else { min.z = point.z; max.z = size.z; }
 
         cyclone::Vector3 halfSize = (max - min) * 0.5f;
         cyclone::Vector3 newPos = halfSize + min;
-
         newPos = tempBody.getPointInWorldSpace(newPos);
 
         newBlocks[i].body->setPosition(newPos);
@@ -151,8 +130,7 @@ void FractureDemo::divideBlock(const cyclone::Contact& contact, Block* target, B
 
 void FractureDemo::checkFractures(const cyclone::Contact* contacts, unsigned numContacts)
 {
-    // Verifica se o impulso ou força de colisão excedeu o limite de ruptura (breaking strain)
-    // Se exceder, chama divideBlock para fragmentar o bloco atingido.
+    // Lógica para verificar limite de ruptura (breaking strain) com base nos contatos
 }
 
 void FractureDemo::generateContacts()
@@ -179,5 +157,5 @@ void FractureDemo::update(real duration)
 
 void FractureDemo::display()
 {
-    // Renderização dos blocos existentes na tela...
+    // Renderização dos blocos fracionados na tela
 }
