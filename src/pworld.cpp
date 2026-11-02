@@ -1,78 +1,81 @@
+/*
+ * pworld.cpp
+ * 
+ * Este arquivo contém a implementação da classe 'ParticleWorld' no motor físico Cyclone.
+ * Ele gerencia o ciclo de vida da simulação de partículas, incluindo o registro de forças,
+ * geradores de contato, execução de passos de integração e resolução unificada.
+ * 
+ * Parte da biblioteca física Cyclone.
+ */
+
 #include <cyclone/pworld.h>
 
 namespace cyclone {
 
-    ParticleWorld::ParticleWorld(unsigned maxContacts, unsigned iterations)
-        : resolver(iterations), maxContacts(maxContacts)
-    {
-        contacts = new ParticleContact[maxContacts];
-        calculateIterations = (iterations == 0);
-    }
+/*
+ * =========================================================
+ * IMPLEMENTAÇÃO DE PARTICLEWORLD
+ * =========================================================
+ */
 
-    ParticleWorld::~ParticleWorld()
-    {
-        delete[] contacts;
-    }
+ParticleWorld::ParticleWorld(unsigned maxContacts, unsigned iterations)
+    : maxContacts(maxContacts),
+      resolver(iterations),
+      calculateIterations(iterations == 0) {
+    contacts = new ParticleContact[maxContacts];
+}
 
-    void ParticleWorld::startFrame()
-    {
-        for (Particles::iterator p = particles.begin(); p != particles.end(); ++p)
-        {
-            (*p)->clearAccumulator();
-        }
-    }
+ParticleWorld::~ParticleWorld() {
+    delete[] contacts;
+}
 
-    unsigned ParticleWorld::generateContacts()
-    {
-        unsigned limit = maxContacts;
-        ParticleContact *nextContact = contacts;
-
-        for (ContactGenerators::iterator g = contactGenerators.begin(); g != contactGenerators.end(); ++g)
-        {
-            unsigned used = (*g)->addContact(nextContact, limit);
-            limit -= used;
-            nextContact += used;
-
-            // Se esgotarmos o limite do array de contatos, interrompe
-            if (limit <= 0) break;
-        }
-
-        // Retorna o número total de contatos preenchidos
-        return maxContacts - limit;
-    }
-
-    void ParticleWorld::integrate(real duration)
-    {
-        for (Particles::iterator p = particles.begin(); p != particles.end(); ++p)
-        {
-            (*p)->integrate(duration);
-        }
-    }
-
-    void ParticleWorld::runPhysics(real duration)
-    {
-        // 1. Aplica todos os geradores de força
-        registry.updateForces(duration);
-
-        // 2. Integra o movimento de todas as partículas
-        integrate(duration);
-
-        // 3. Detecta e coleta todos os contatos do quadro
-        unsigned usedContacts = generateContacts();
-
-        // 4. Resolve os contatos gerados
-        if (usedContacts > 0)
-        {
-            if (calculateIterations)
-            {
-                resolver.setIterations(usedContacts * 2);
-            }
-            resolver.resolveContacts(contacts, usedContacts, duration);
-        }
-    }
-
-    void ParticleWorld::addContactGenerator(ParticleContactGenerator *generator)
-    {
-        contactGenerators.push_back(generator);
+void ParticleWorld::startFrame() {
+    // Limpa acumuladores de força de todas as partículas no início do quadro
+    for (auto p = particles.begin(); p != particles.end(); ++p) {
+        (*p)->clearAccumulator();
     }
 }
+
+void ParticleWorld::runPhysics(real duration) {
+    // 1. Aplica todas as forças registradas às respectivas partículas
+    registry.updateForces(duration);
+
+    // 2. Integra o movimento de todas as partículas (atualiza velocidades e posições)
+    for (auto p = particles.begin(); p != particles.end(); ++p) {
+        (*p)->integrate(duration);
+    }
+
+    // 3. Coleta e gera todos os contatos ativos no mundo
+    unsigned usedContacts = 0;
+    for (auto g = contactGenerators.begin(); g != contactGenerators.end(); ++g) {
+        unsigned count = (*g)->addContact(contacts + usedContacts, maxContacts - usedContacts);
+        usedContacts += count;
+        
+        // Se exceder o limite máximo de contatos, interrompe a coleta por segurança
+        if (usedContacts >= maxContacts) {
+            break;
+        }
+    }
+
+    // 4. Resolve o conjunto de contatos gerados
+    if (usedContacts > 0) {
+        if (calculateIterations) {
+            resolver.setIterations(usedContacts * 2);
+        }
+        resolver.resolveContacts(contacts, usedContacts, duration);
+    }
+}
+
+ParticleWorld::Particles& ParticleWorld::getParticles() {
+    return particles;
+}
+
+ParticleForceRegistry& ParticleWorld::getForceRegistry() {
+    return registry;
+}
+
+ParticleWorld::ContactGenerators& ParticleWorld::getContactGenerators() {
+    return contactGenerators;
+}
+
+} // namespace cyclone
