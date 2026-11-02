@@ -1,118 +1,112 @@
 /*
- * Geradores de Força do motor Cyclone.
- * Atualizado com a classe Explosion de três componentes (Capítulo 17.2.3).
+ * pfgen.h
+ * 
+ * Este arquivo define o sistema de geradores de força para partículas no motor físico Cyclone.
+ * Ele inclui a interface base 'ParticleForceGenerator' e a classe 'ParticleForceRegistry',
+ * responsável por mapear quais forças devem ser aplicadas a quais partículas a cada quadro (frame).
+ * 
+ * Parte da biblioteca física Cyclone.
  */
 
-#ifndef CYCLONE_FGEN_H
-#define CYCLONE_FGEN_H
+#ifndef CYCLONE_PFGEN_H
+#define CYCLONE_PFGEN_H
 
-#include "precision.h"
-#include "core.h"
-#include "body.h"
 #include "particle.h"
+#include <vector>
 
 namespace cyclone {
 
+/**
+ * @brief Interface para geradores de força que atuam sobre partículas.
+ */
+class ParticleForceGenerator {
+public:
     /**
-     * Interface base para geradores de força aplicados a corpos rígidos.
+     * @brief Sobrescreva este método para calcular e aplicar a força à partícula informada.
+     * 
+     * @param particle Ponteiro para a partícula que receberá a força.
+     * @param duration Intervalo de tempo (delta time) do quadro atual.
      */
-    class ForceGenerator
-    {
-    public:
-        virtual void updateForce(RigidBody *body, real duration) = 0;
+    virtual void updateForce(Particle *particle, real duration) = 0;
+};
+
+/**
+ * @brief Gerador de força da gravidade simples.
+ */
+class ParticleGravity : public ParticleForceGenerator {
+    Vector3 gravity; // Aceleração da gravidade
+
+public:
+    ParticleGravity(const Vector3 &gravity);
+    virtual void updateForce(Particle *particle, real duration);
+};
+
+/**
+ * @brief Gerador de força de atrito com o ar/arrasto (Drag).
+ */
+class ParticleDrag : public ParticleForceGenerator {
+    real k1; // Coeficiente de arrasto de velocidade linear
+    real k2; // Coeficiente de arrasto de velocidade quadrática
+
+public:
+    ParticleDrag(real k1, real k2);
+    virtual void updateForce(Particle *particle, real duration);
+};
+
+/**
+ * @brief Gerador de força de mola ancorada a um ponto fixo no espaço.
+ */
+class ParticleAnchoredSpring : public ParticleForceGenerator {
+protected:
+    Vector3 *anchor; // Ponto de ancoragem da mola
+    real springConstant; // Constante elástica da mola (k)
+    real restLength; // Comprimento de repouso da mola
+
+public:
+    ParticleAnchoredSpring(Vector3 *anchor, real springConstant, real restLength);
+    virtual void updateForce(Particle *particle, real duration);
+};
+
+/**
+ * @brief Registro central para gerenciar e aplicar múltiplos geradores de força a partículas.
+ */
+class ParticleForceRegistry {
+protected:
+    /**
+     * @brief Estrutura interna que associa uma partícula a um gerador de força.
+     */
+    struct ParticleForceRegistration {
+        Particle *particle;
+        ParticleForceGenerator *fg;
     };
 
+    typedef std::vector<ParticleForceRegistration> Registry;
+    Registry registrations;
+
+public:
     /**
-     * Interface base para geradores de força aplicados a partículas.
+     * @brief Registra um par de partícula e gerador de força.
      */
-    class ParticleForceGenerator
-    {
-    public:
-        virtual void updateForce(Particle *particle, real duration) = 0;
-    };
+    void add(Particle *particle, ParticleForceGenerator *fg);
 
     /**
-     * Gerador de força para explosões cinematográficas em três fases:
-     * Implosão, Onda de Concussão e Chaminé de Convecção (Capítulo 17.2.3).
+     * @brief Remove o registro entre uma partícula e um gerador de força.
      */
-    class Explosion : public ForceGenerator, public ParticleForceGenerator
-    {
-    protected:
-        real timePassed;
+    void remove(Particle *particle, ParticleForceGenerator *fg);
 
-    public:
-        // Posição da detonação
-        Vector3 detonation;
+    /**
+     * @brief Limpa todos os registros cadastrados.
+     */
+    void clear();
 
-        // Propriedades da Implosão
-        real implosionMaxRadius;
-        real implosionMinRadius;
-        real implosionDuration;
-        real implosionForce;
-
-        // Propriedades da Onda de Concussão (Shockwave)
-        real concussionWaveSpeed;
-        real peakConcussionForce;
-        real concussionWidth;
-        real concussionTail;
-
-        // Propriedades da Chaminé de Convecção
-        real peakConvectionForce;
-        real chimneyRadius;
-        real chimneyHeight;
-        real convectionDuration;
-
-        Explosion()
-            : timePassed(0.0f),
-              implosionMaxRadius(10.0f), implosionMinRadius(1.0f), implosionDuration(0.2f), implosionForce(5.0f),
-              concussionWaveSpeed(15.0f), peakConcussionForce(50.0f), concussionWidth(2.0f), concussionTail(1.0f),
-              peakConvectionForce(2.0f), chimneyRadius(5.0f), chimneyHeight(20.0f), convectionDuration(5.0f) {}
-
-        virtual void updateForce(RigidBody *body, real duration)
-        {
-            timePassed += duration;
-            Vector3 position = body->getPosition();
-            Vector3 blastToBody = position - detonation;
-            real distance = blastToBody.magnitude();
-
-            // 1. Fase de Implosão
-            if (timePassed < implosionDuration && distance > implosionMinRadius && distance < implosionMaxRadius)
-            {
-                Vector3 implosionDir = blastToBody.unit();
-                body->addForce(implosionDir * -implosionForce);
-            }
-
-            // 2. Fase da Onda de Concussão (Shockwave)
-            real waveFront = concussionWaveSpeed * timePassed;
-            if (distance >= waveFront - concussionWidth && distance <= waveFront + (concussionTail + 1.0f) * concussionWidth)
-            {
-                Vector3 waveDir = blastToBody.unit();
-                real forceMag = peakConcussionForce; // Aplicando simplificação do perfil de força
-                
-                // Aplica a força descentralizada para gerar torque/rotação
-                Vector3 offsetPoint = position + Vector3(0.5f, 0.5f, 0.5f); // Ponto descentralizado
-                body->addForceAtPoint(waveDir * forceMag, offsetPoint);
-            }
-
-            // 3. Fase da Chaminé de Convecção
-            if (timePassed < convectionDuration)
-            {
-                real dxz = real_sqrt(blastToBody.x * blastToBody.x + blastToBody.z * blastToBody.z);
-                real dy = blastToBody.y;
-                if (dxz < chimneyRadius && dy > 0 && dy < chimneyHeight)
-                {
-                    Vector3 convectionDir(0.1f, 1.0f, 0.1f); // Leve inclinação para moldar o cogumelo
-                    body->addForce(convectionDir * peakConvectionForce);
-                }
-            }
-        }
-
-        virtual void updateForce(Particle *particle, real duration)
-        {
-            // Implementação análoga para partículas, se necessário
-        }
-    };
+    /**
+     * @brief Atualiza e aplica todas as forças registradas às suas respectivas partículas.
+     * 
+     * @param duration Intervalo de tempo (delta time) do quadro.
+     */
+    void updateForces(real duration);
+};
 
 } // namespace cyclone
 
-#endif // CYCLONE_FGEN_H
+#endif // CYCLONE_PFGEN_H
